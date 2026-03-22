@@ -12,19 +12,16 @@ Built up to Journal de Bord Week 2 (Sprint S0 + S1 start).
 cd backend
 npm install
 npm start
-# Runs on http://localhost:5000
+# http://localhost:5000
 ```
 
-### 2 — Start the frontend (new terminal)
+### 2 — Start the frontend 
 ```bash
 cd frontend
 npm install
 npm start
-# Opens http://localhost:3000
+# http://localhost:3000
 ```
-
-Both must run at the same time.
-The frontend proxies /api/* calls to localhost:5000.
 
 ---
 
@@ -44,12 +41,12 @@ The frontend proxies /api/* calls to localhost:5000.
 ### Frontend (React + Recharts)
 - `App.js` — Navigation between 3 tabs
 - `KpiCards.js` — Summary KPI tiles (avg health, critical count, PUE, EER, CO₂)
-- `HealthView.js` — Asset cards with health score bar, RUL, MTBF, sensors, Work Order button
+- `HealthView.js` — Cards with health score bar, RUL, MTBF, sensors, Work Order button
 - `EnergyView.js` — Actual vs baseline chart, per-resource badges
-- `hooks/useApi.js` — Polling hook (replaces mock setInterval from journal week 2)
+- `hooks/useApi.js` — Polling hook 
 
 ---
 
 ## Sprint context
-- Week 1 (S0): environment setup, architecture, GitHub, backlog
-- Week 2 (S1 start): React bootstrap, Health View, Energy View, KPI cards, mock data
+- Week 1 (S0 -- W1->W3): Environment setup, Architecture, GitHub, Backlog
+- Week 2 (S1 -- W4->W7): React bootstrap, Health View, Energy View, KPI cards, mock data
