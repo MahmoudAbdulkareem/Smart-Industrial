@@ -1,8 +1,5 @@
 # Smart Industrial Dashboard
 PFE — Mahmoud Abdulkareem | ESPRIT 2025–2026
-
-Built up to Journal de Bord Week 2 (Sprint S0 + S1 start).
-
 ---
 
 ## How to run
