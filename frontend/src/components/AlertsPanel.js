@@ -1,284 +1,158 @@
-// AlertsPanel.js — Alerts tab
-//
-// Sprint S2 Week 2 — Journal de Bord, March 30 – April 3
-//
-// March 30 (Mon):
-//   "Built an Alert Panel that shows warnings per asset — things like high
-//    temperature, low remaining useful life, or an energy spike. Alerts
-//    need severity levels, otherwise operators don't know what to deal
-//    with first. That seems obvious in hindsight."
-//   Problem: "The panel was showing everything at once which was
-//    overwhelming. Added a filter so only unresolved alerts show by default."
-//
-// March 31 (Tue):
-//   "Styled the alert cards with colour coding — red for critical, orange
-//    for warning, blue for informational. Added icons and text labels
-//    alongside the colour so there's no ambiguity."
-//   Problem: "Cards were overlapping on smaller screens. Flexbox wrap sorted
-//    it out quickly."
-//
-// April 3 (Fri):
-//   "The panel wasn't refreshing automatically after new rows were inserted.
-//    Added 10-second polling as a short-term fix. WebSockets are next."
-//
-// Key concept — optimistic UI update:
-//   When the user clicks Acknowledge, we update the local React state
-//   IMMEDIATELY (the card moves to the Acknowledged list at once).
-//   Then we fire the PATCH request to the backend in the background.
-//   This makes the UI feel instant even if the server takes 200ms to respond.
-//   If the request fails, we could roll back the state (not implemented here).
-
 import React, { useState } from "react";
 import { useApi } from "../hooks/useApi";
 
-const SEVERITY = {
-  critical: {
-    bg:     "#3d1a1a",
-    color:  "#f85149",
-    border: "#6e2929",
-    label:  "Critical",
-    icon:   "🔴",
-  },
-  caution: {
-    bg:     "#2d2208",
-    color:  "#d29922",
-    border: "#78490040",
-    label:  "Caution",
-    icon:   "🟡",
-  },
-  info: {
-    bg:     "#0d2137",
-    color:  "#58a6ff",
-    border: "#1f6feb40",
-    label:  "Info",
-    icon:   "🔵",
-  },
+const SEV = {
+  critical: { bg:"#fef2f2", border:"#fecaca", text:"#b91c1c", left:"#ef4444", label:"Critical" },
+  caution:  { bg:"#fffbeb", border:"#fde68a", text:"#b45309", left:"#f59e0b", label:"Caution"  },
+  info:     { bg:"#eff6ff", border:"#bfdbfe", text:"#1e40af", left:"#3b82f6", label:"Info"     },
 };
 
-function AlertCard({ alert, canAcknowledge, onAcknowledge }) {
-  const s = SEVERITY[alert.severity] || SEVERITY.info;
+const ASSET_TABS = [
+  { id: "all",         label: "All Alerts" },
+  { id: "AST-003",     label: "Conveyor Belt C" },
+  { id: "AST-004",     label: "HVAC Unit D" },
+  { id: "AST-001",     label: "Compressor A" },
+  { id: "AST-005",     label: "Motor Drive E" },
+  { id: "AST-002",     label: "Pump Station B" },
+];
 
-  return (
-    <div style={{
-      backgroundColor: s.bg,
-      border:          `1px solid ${s.border}`,
-      borderLeft:      `4px solid ${s.color}`,
-      borderRadius:    7,
-      padding:         "14px 16px",
-      display:         "flex",
-      justifyContent:  "space-between",
-      alignItems:      "flex-start",
-      gap:             12,
-    }}>
-      <div style={{ flex: 1 }}>
-        {/* Top row: severity badge + asset name + timestamp */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-          <span style={{
-            backgroundColor: s.color + "22",
-            color:           s.color,
-            border:          `1px solid ${s.color}44`,
-            fontSize:        10,
-            fontWeight:      700,
-            padding:         "2px 8px",
-            borderRadius:    10,
-            textTransform:   "uppercase",
-            letterSpacing:   0.6,
-          }}>
-            {s.icon} {s.label}
-          </span>
-          <strong style={{ fontSize: 13, color: "#e6edf3" }}>{alert.asset}</strong>
-          <span style={{
-            fontSize:    10,
-            color:       "#484f58",
-            marginLeft:  "auto",
-            fontFamily:  "'JetBrains Mono', monospace",
-          }}>
-            {alert.time}
-          </span>
-        </div>
-
-        {/* Alert message */}
-        <p style={{ margin: 0, fontSize: 13, color: "#8b949e", lineHeight: 1.5 }}>
-          {alert.message}
-        </p>
-
-        {/* Metadata */}
-        <p style={{ margin: "6px 0 0", fontSize: 10, color: "#484f58", fontFamily: "'JetBrains Mono', monospace" }}>
-          ID #{alert.id} · {alert.assetId}
-        </p>
-      </div>
-
-      {/* Acknowledge button — maintenance_engineer only */}
-      {canAcknowledge && (
-        <button
-          onClick={() => onAcknowledge(alert.id)}
-          style={{
-            padding:         "6px 12px",
-            fontSize:        11,
-            fontWeight:      500,
-            backgroundColor: "transparent",
-            border:          `1px solid ${s.color}`,
-            color:           s.color,
-            borderRadius:    5,
-            cursor:          "pointer",
-            whiteSpace:      "nowrap",
-            flexShrink:      0,
-            fontFamily:      "inherit",
-          }}
-        >
-          Acknowledge
-        </button>
-      )}
-    </div>
-  );
-}
+const PAGE_SIZE = 5;
 
 export default function AlertsPanel({ userRole }) {
   const { data, loading, error } = useApi("/alerts", 10000);
-
-  // localAcked tracks IDs acknowledged THIS session.
-  // Combined with the DB acknowledged flag, this gives instant UI feedback.
-  // Journal note: "Track locally acknowledged IDs so UI updates instantly.
-  // The real acknowledge is also persisted to SQL Server via PATCH."
   const [localAcked, setLocalAcked] = useState([]);
+  const [assetTab,   setAssetTab]   = useState("all");
+  const [activePage, setActivePage] = useState(1);
+  const [donePage,   setDonePage]   = useState(1);
 
-  if (loading) return <SkeletonList />;
-  if (error)   return <p style={{ color: "#f85149", fontSize: 13 }}>Error: {error}</p>;
-  if (!data)   return <SkeletonList />;
-
-  const active = data.filter(a => !a.acknowledged && !localAcked.includes(a.id));
-  const done   = data.filter(a =>  a.acknowledged ||  localAcked.includes(a.id));
+  if (loading) return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {[...Array(3)].map((_,i) => <div key={i} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:9, height:76, animation:"pulse 1.4s ease-in-out " + (i*0.1) + "s infinite" }} />)}
+    </div>
+  );
+  if (error) return <p style={{ color:"#dc2626", fontSize:13 }}>Error: {error}</p>;
+  if (!data)  return null;
 
   const canAck = userRole === "maintenance_engineer";
 
-  async function handleAcknowledge(id) {
-    // Optimistic update — move card instantly without waiting for server
+  async function handleAck(id) {
     setLocalAcked(prev => [...prev, id]);
-
-    // Persist to SQL Server in the background
     try {
-      const token = localStorage.getItem("token");
-      await fetch(`/api/alerts/${id}/acknowledge`, {
-        method:  "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
+      await fetch("/api/alerts/" + id + "/acknowledge", {
+        method: "PATCH",
+        headers: { Authorization: "Bearer " + localStorage.getItem("token") },
       });
-    } catch (err) {
-      console.error("Failed to acknowledge on server:", err);
-      // Could roll back here: setLocalAcked(prev => prev.filter(x => x !== id));
-    }
+    } catch {}
+  }
+
+  const filtered = assetTab === "all" ? data : data.filter(a => a.assetId === assetTab);
+  const active   = filtered.filter(a => !a.acknowledged && !localAcked.includes(a.id));
+  const done     = filtered.filter(a =>  a.acknowledged ||  localAcked.includes(a.id));
+
+  const totalActivePages = Math.max(1, Math.ceil(active.length / PAGE_SIZE));
+  const totalDonePages   = Math.max(1, Math.ceil(done.length   / PAGE_SIZE));
+  const safePage = p => Math.min(Math.max(1, p), totalActivePages);
+
+  const pagedActive = active.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  const pagedDone   = done.slice((donePage   - 1) * PAGE_SIZE, donePage   * PAGE_SIZE);
+
+  function Pagination({ page, total, onChange }) {
+    if (total <= 1) return null;
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, justifyContent:"flex-end" }}>
+        <button onClick={() => onChange(page - 1)} disabled={page === 1}
+          style={{ padding:"4px 10px", fontSize:12, border:"1px solid #d1d9e6", borderRadius:6, background:"#fff", cursor:page===1?"not-allowed":"pointer", color:page===1?"#c9d3df":"#374151" }}>‹</button>
+        {[...Array(total)].map((_, i) => (
+          <button key={i} onClick={() => onChange(i + 1)}
+            style={{ padding:"4px 10px", fontSize:12, border:"1px solid " + (page===i+1?"#1d6fcc":"#d1d9e6"), borderRadius:6, background:page===i+1?"#1d6fcc":"#fff", color:page===i+1?"#fff":"#374151", cursor:"pointer", fontWeight:page===i+1?600:400 }}>
+            {i + 1}
+          </button>
+        ))}
+        <button onClick={() => onChange(page + 1)} disabled={page === total}
+          style={{ padding:"4px 10px", fontSize:12, border:"1px solid #d1d9e6", borderRadius:6, background:"#fff", cursor:page===total?"not-allowed":"pointer", color:page===total?"#c9d3df":"#374151" }}>›</button>
+      </div>
+    );
   }
 
   return (
     <div>
-      {/* Active alerts */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <span style={sectionLabel}>Active</span>
-        <span style={{
-          backgroundColor: active.length > 0 ? "#3d1a1a" : "#1a3a2a",
-          color:           active.length > 0 ? "#f85149" : "#3fb950",
-          border:          `1px solid ${active.length > 0 ? "#6e292940" : "#2ea04340"}`,
-          fontSize:        11,
-          fontWeight:      700,
-          padding:         "2px 8px",
-          borderRadius:    10,
-          fontFamily:      "'JetBrains Mono', monospace",
-        }}>
+      <div style={{ display:"flex", gap:4, marginBottom:20, background:"#f0f4f8", borderRadius:10, padding:4 }}>
+        {ASSET_TABS.map(t => {
+          const count = t.id === "all" ? data.filter(a => !a.acknowledged && !localAcked.includes(a.id)).length
+                                       : data.filter(a => a.assetId === t.id && !a.acknowledged && !localAcked.includes(a.id)).length;
+          return (
+            <button key={t.id} onClick={() => { setAssetTab(t.id); setActivePage(1); setDonePage(1); }}
+              style={{ flex:1, padding:"8px 12px", fontSize:12, fontWeight:assetTab===t.id?600:400, border:"none", borderRadius:7, cursor:"pointer", transition:"all 0.15s", fontFamily:"inherit",
+                background:assetTab===t.id?"#fff":"transparent", color:assetTab===t.id?"#1d6fcc":"#6b7a99",
+                boxShadow:assetTab===t.id?"0 1px 4px rgba(0,0,0,0.08)":"none" }}>
+              {t.label}
+              {count > 0 && <span style={{ marginLeft:6, background:"#ef4444", color:"#fff", fontSize:10, fontWeight:700, padding:"1px 6px", borderRadius:10 }}>{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <span style={{ fontSize:11, fontWeight:600, color:"#6b7a99", textTransform:"uppercase", letterSpacing:0.7 }}>Active</span>
+        <span style={{ background: active.length > 0 ? "#fef2f2" : "#f0fdf4", color: active.length > 0 ? "#b91c1c" : "#15803d", border:"1px solid " + (active.length > 0 ? "#fecaca" : "#bbf7d0"), fontSize:11, fontWeight:700, padding:"1px 8px", borderRadius:10 }}>
           {active.length}
         </span>
       </div>
 
       {active.length === 0 ? (
-        <div style={{
-          backgroundColor: "#1a3a2a",
-          border:          "1px solid #2ea04340",
-          borderRadius:    7,
-          padding:         "16px 20px",
-          fontSize:        13,
-          color:           "#3fb950",
-          marginBottom:    24,
-        }}>
-          ✓ All clear — no active alerts
+        <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:9, padding:"16px 20px", fontSize:13, color:"#15803d", marginBottom:24 }}>
+          ✓ No active alerts{assetTab !== "all" ? " for this asset" : ""}
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-          {active.map(alert => (
-            <AlertCard
-              key={alert.id}
-              alert={alert}
-              canAcknowledge={canAck}
-              onAcknowledge={handleAcknowledge}
-            />
-          ))}
+        <div style={{ marginBottom:6 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {pagedActive.map(alert => {
+              const s = SEV[alert.severity] || SEV.info;
+              return (
+                <div key={alert.id} style={{ background:s.bg, border:"1px solid " + s.border, borderLeft:"4px solid " + s.left, borderRadius:9, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6, flexWrap:"wrap" }}>
+                      <span style={{ background:s.text, color:"#fff", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:10, textTransform:"uppercase", letterSpacing:0.5 }}>{s.label}</span>
+                      <strong style={{ fontSize:13, color:"#1a2332" }}>{alert.asset}</strong>
+                      <span style={{ fontSize:11, color:"#9aa5b4", marginLeft:"auto" }}>{alert.time}</span>
+                    </div>
+                    <p style={{ margin:0, fontSize:13, color:"#4b5563", lineHeight:1.5 }}>{alert.message}</p>
+                    <p style={{ margin:"5px 0 0", fontSize:10, color:"#9aa5b4" }}>ID #{alert.id} · {alert.assetId}</p>
+                  </div>
+                  {canAck && (
+                    <button onClick={() => handleAck(alert.id)} style={{ padding:"5px 12px", fontSize:11, fontWeight:500, background:"#fff", border:"1px solid " + s.left, color:s.text, borderRadius:6, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0, fontFamily:"inherit" }}>
+                      Acknowledge
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <Pagination page={activePage} total={totalActivePages} onChange={p => setActivePage(safePage(p))} />
         </div>
       )}
 
-      {/* Acknowledged alerts */}
       {done.length > 0 && (
-        <>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <span style={{ ...sectionLabel, color: "#484f58" }}>Acknowledged</span>
-            <span style={{
-              backgroundColor: "#21262d",
-              color:           "#484f58",
-              fontSize:        11,
-              fontWeight:      700,
-              padding:         "2px 8px",
-              borderRadius:    10,
-              fontFamily:      "'JetBrains Mono', monospace",
-            }}>
-              {done.length}
-            </span>
+        <div style={{ marginTop:24 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:"#9aa5b4", textTransform:"uppercase", letterSpacing:0.7 }}>Acknowledged</span>
+            <span style={{ background:"#f1f5f9", color:"#6b7a99", border:"1px solid #e2e8f0", fontSize:11, fontWeight:700, padding:"1px 8px", borderRadius:10 }}>{done.length}</span>
           </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {done.map(alert => (
-              <div key={alert.id} style={{
-                backgroundColor: "#161b22",
-                border:          "1px solid #21262d",
-                borderRadius:    7,
-                padding:         "10px 16px",
-                display:         "flex",
-                alignItems:      "center",
-                gap:             12,
-                opacity:         0.55,
-              }}>
-                <span style={{ color: "#3fb950", fontSize: 14 }}>✓</span>
-                <div style={{ flex: 1 }}>
-                  <strong style={{ fontSize: 12, color: "#8b949e" }}>{alert.asset}</strong>
-                  <span style={{ fontSize: 12, color: "#484f58", marginLeft: 8 }}>— {alert.message}</span>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {pagedDone.map(alert => (
+              <div key={alert.id} style={{ background:"#f8faff", border:"1px solid #e2e8f0", borderRadius:9, padding:"10px 16px", display:"flex", alignItems:"center", gap:12, opacity:0.65 }}>
+                <span style={{ color:"#22c55e", fontWeight:700 }}>✓</span>
+                <div style={{ flex:1 }}>
+                  <strong style={{ fontSize:12, color:"#374151" }}>{alert.asset}</strong>
+                  <span style={{ fontSize:12, color:"#6b7a99", marginLeft:8 }}>— {alert.message}</span>
                 </div>
-                <span style={{ fontSize: 10, color: "#484f58", fontFamily: "'JetBrains Mono', monospace" }}>
-                  {alert.time}
-                </span>
+                <span style={{ fontSize:10, color:"#9aa5b4" }}>{alert.time}</span>
               </div>
             ))}
           </div>
-        </>
+          <Pagination page={donePage} total={totalDonePages} onChange={p => setDonePage(Math.min(Math.max(1,p), totalDonePages))} />
+        </div>
       )}
     </div>
   );
 }
-
-function SkeletonList() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {[...Array(3)].map((_, i) => (
-        <div key={i} style={{
-          backgroundColor: "#161b22", border: "1px solid #30363d",
-          borderRadius: 7, height: 80,
-          animation: "pulse 1.5s ease-in-out infinite",
-          animationDelay: `${i * 0.12}s`,
-        }} />
-      ))}
-      <style>{`@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.8} }`}</style>
-    </div>
-  );
-}
-
-const sectionLabel = {
-  fontSize:      11,
-  fontWeight:    600,
-  color:         "#8b949e",
-  textTransform: "uppercase",
-  letterSpacing: 0.8,
-};

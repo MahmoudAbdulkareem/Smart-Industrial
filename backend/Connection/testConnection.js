@@ -1,6 +1,5 @@
 const sql = require("mssql");
 
-// Test 1 — Windows Auth with instance name
 async function test1() {
   try {
     await sql.connect({
@@ -19,7 +18,6 @@ async function test1() {
   }
 }
 
-// Test 2 — dot notation
 async function test2() {
   try {
     await sql.connect({
@@ -38,7 +36,6 @@ async function test2() {
   }
 }
 
-// Test 3 — with port 1433
 async function test3() {
   try {
     await sql.connect({
@@ -58,7 +55,6 @@ async function test3() {
   }
 }
 
-// Test 4 — SQL Login (create this user first in SSMS)
 async function test4() {
   try {
     await sql.connect({

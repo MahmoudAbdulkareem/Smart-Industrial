@@ -1,153 +1,187 @@
-import React, { useState } from "react";
-import Login        from "./components/Login";
-import HealthView   from "./components/HealthView";
-import EnergyView   from "./components/EnergyView";
-import KpiCards     from "./components/KpiCards";
-import AlertsPanel  from "./components/AlertsPanel";
+import React, { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import Login          from "./components/Login";
+import ProtectedRoute from "./components/ProtectedRoute";
+import KpiCards       from "./components/KpiCards";
+import HealthView     from "./components/HealthView";
+import EnergyView     from "./components/EnergyView";
+import AlertsPanel    from "./components/AlertsPanel";
 
-// Tabs visible to each role
-const ROLE_TABS = {
+const ROLE_NAV = {
   maintenance_engineer: [
-    { id: "kpis",    label: "KPI Overview" },
-    { id: "health",  label: "Health View"  },
-    { id: "alerts",  label: "Alerts"       },
+    { id:"kpis",   label:"KPI Overview",   desc:"Summary of all asset and energy KPIs." },
+    { id:"health", label:"Health View",    desc:"Asset health scores, RUL, MTBF, and live sensor readings." },
+    { id:"alerts", label:"Alerts",   desc:"Active predictive alerts and acknowledged notifications." },
   ],
   energy_manager: [
-    { id: "kpis",    label: "KPI Overview" },
-    { id: "energy",  label: "Energy View"  },
-    { id: "alerts",  label: "Alerts"       },
+    { id:"kpis",   label:"KPI Overview" , desc:"Summary of all asset and energy KPIs." },
+    { id:"energy", label:"Energy View",  desc:"Energy consumption vs baseline, PUE, EER, and CO₂." },
+    { id:"alerts", label:"Alerts",   desc:"Active predictive alerts and acknowledged notifications." },
+  ],
+    it_admin: [
+    { id:"kpis",   label:"KPI Overview" , desc:"Summary of all asset and energy KPIs." },
+    { id:"energy", label:"Energy View",  desc:"Energy consumption vs baseline, PUE, EER, and CO₂." },
+    { id:"alerts", label:"Alerts",   desc:"Active predictive alerts and acknowledged notifications." },
+    { id:"kpis",   label:"KPI Overview",   desc:"Summary of all asset and energy KPIs." },
+    { id:"health", label:"Health View",    desc:"Asset health scores, RUL, MTBF, and live sensor readings." },
+    { id:"alerts", label:"Alerts",   desc:"Active predictive alerts and acknowledged notifications." },
   ],
 };
 
-// Role display labels
 const ROLE_LABELS = {
   maintenance_engineer: "Maintenance Engineer",
   energy_manager:       "Energy Manager",
+  it_admin:             "IT Admin"
 };
 
-export default function App() {
-  // Try to restore user from localStorage on first load
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem("user");
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+function Clock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const date = now.toLocaleDateString("en-GB", { weekday:"short", day:"2-digit", month:"short", year:"numeric" });
+  const time = now.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  return (
+    <div style={{ textAlign:"right", lineHeight:1.3 }}>
+      <div style={{ fontSize:16, fontWeight:700, color:"#1a2332", letterSpacing:0.5, fontVariantNumeric:"tabular-nums" }}>{time}</div>
+      <div style={{ fontSize:11, color:"#6b7a99" }}>{date}</div>
+    </div>
+  );
+}
 
+function Dashboard() {
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const [user]    = useState(() => { try { return JSON.parse(localStorage.getItem("user")); } catch { return null; } });
   const [tab, setTab] = useState("kpis");
+  const [sideOpen, setSideOpen] = useState(true);
 
-  // Called by Login component after successful login
-  function handleLogin(loggedInUser) {
-    setUser(loggedInUser);
-    setTab("kpis");
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
-  // Logout
-  function handleLogout() {
+  const navItems = ROLE_NAV[user.role] || [];
+  const active   = navItems.find(n => n.id === tab) || navItems[0];
+
+  function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    setUser(null);
-    setTab("kpis");
+    navigate("/login", { replace:true });
   }
 
-  // Not logged in → show login page
-  if (!user) {
-    return <Login onLogin={handleLogin} />;
-  }
-
-  const tabs = ROLE_TABS[user.role] || [];
-
-  // If current tab is not available for this role, reset to first
-  const activeTab = tabs.find(t => t.id === tab) ? tab : tabs[0]?.id;
+  const SIDE_W = sideOpen ? 220 : 60;
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
+    <div style={{ display:"flex", minHeight:"100vh", background:"#f0f4f8", fontFamily:"'Inter', Arial, sans-serif" }}>
 
-      {/* Navbar */}
-      <nav style={{
-        backgroundColor: "#343a40",
-        padding:         "0 24px",
-        display:         "flex",
-        alignItems:      "center",
-        height:          52,
-        gap:             8,
+      <aside style={{
+        width:SIDE_W, flexShrink:0, background:"#fff", borderRight:"1px solid #e2e8f0",
+        display:"flex", flexDirection:"column", transition:"width 0.22s ease",
+        position:"sticky", top:0, height:"100vh", overflow:"hidden",
       }}>
-        {/* App name */}
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, marginRight: 16, whiteSpace: "nowrap" }}>
-          Smart Dashboard
-        </span>
+        <div style={{ padding:"18px 14px", borderBottom:"1px solid #f0f4f8", display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:34, height:34, borderRadius:8, background:"#1d6fcc", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <rect x="1" y="1" width="7" height="7" rx="1.5" fill="white" opacity="0.9"/>
+              <rect x="10" y="1" width="7" height="7" rx="1.5" fill="white" opacity="0.55"/>
+              <rect x="1" y="10" width="7" height="7" rx="1.5" fill="white" opacity="0.55"/>
+              <rect x="10" y="10" width="7" height="7" rx="1.5" fill="white" opacity="0.9"/>
+            </svg>
+          </div>
+          {sideOpen && (
+            <div style={{ overflow:"hidden", whiteSpace:"nowrap" }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1a2332", letterSpacing:-0.2 }}>Smart Dashboard</div>
+              <div style={{ fontSize:10, color:"#9aa5b4" }}>Industrial Monitor</div>
+            </div>
+          )}
+        </div>
 
-        {/* Tabs — only what this role can see */}
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              background:   "none",
-              border:       "none",
-              color:        activeTab === t.id ? "#fff" : "#adb5bd",
-              fontSize:     14,
-              cursor:       "pointer",
-              padding:      "0 8px",
-              height:       52,
-              borderBottom: activeTab === t.id ? "2px solid #007bff" : "2px solid transparent",
-            }}
-          >
-            {t.label}
+        <nav style={{ padding:"12px 8px", flex:1 }}>
+          {navItems.map(item => {
+            const isActive = tab === item.id;
+            return (
+              <button key={item.id} onClick={() => setTab(item.id)} title={!sideOpen ? item.label : ""}
+                style={{
+                  width:"100%", display:"flex", alignItems:"center", gap:10,
+                  padding: sideOpen ? "10px 12px" : "10px 14px",
+                  marginBottom:4, borderRadius:8, border:"none", cursor:"pointer",
+                  background: isActive ? "#eff6ff" : "transparent",
+                  color:      isActive ? "#1d6fcc" : "#6b7a99",
+                  fontWeight: isActive ? 600 : 400,
+                  fontSize:13, fontFamily:"inherit", textAlign:"left",
+                  justifyContent: sideOpen ? "flex-start" : "center",
+                  transition:"all 0.15s",
+                }}>
+                <span style={{ fontSize:16, flexShrink:0 }}>{item.icon}</span>
+                {sideOpen && <span style={{ overflow:"hidden", whiteSpace:"nowrap" }}>{item.label}</span>}
+                {isActive && <span style={{ marginLeft:"auto", width:4, height:4, borderRadius:"50%", background:"#1d6fcc", flexShrink:0, display: sideOpen ? "block":"none" }} />}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div style={{ padding:"12px 8px", borderTop:"1px solid #f0f4f8" }}>
+          <button onClick={() => setSideOpen(v => !v)}
+            style={{ width:"100%", padding:"8px 10px", border:"1px solid #e2e8f0", borderRadius:8, background:"#f8faff", cursor:"pointer", fontSize:12, color:"#6b7a99", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+            <span style={{ fontSize:14, transform: sideOpen ? "rotate(180deg)" : "rotate(0deg)", display:"inline-block", transition:"transform 0.2s" }}>❮</span>
+            {sideOpen && <span>Collapse</span>}
           </button>
-        ))}
+        </div>
+      </aside>
 
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* User info + role badge + logout */}
-        <span style={{ color: "#adb5bd", fontSize: 13 }}>{user.name}</span>
-        <span style={{
-          backgroundColor: user.role === "maintenance_engineer" ? "#007bff" : "#28a745",
-          color:           "#fff",
-          fontSize:        11,
-          fontWeight:      600,
-          padding:         "3px 8px",
-          borderRadius:    10,
+      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
+        <header style={{
+          background:"#fff", borderBottom:"1px solid #e2e8f0",
+          padding:"0 28px", height:60, display:"flex", alignItems:"center",
+          justifyContent:"space-between", position:"sticky", top:0, zIndex:50,
+          boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
         }}>
-          {ROLE_LABELS[user.role]}
-        </span>
-        <button
-          onClick={handleLogout}
-          style={{
-            marginLeft:      8,
-            padding:         "5px 12px",
-            fontSize:        12,
-            backgroundColor: "transparent",
-            border:          "1px solid #6c757d",
-            color:           "#adb5bd",
-            borderRadius:    4,
-            cursor:          "pointer",
-          }}
-        >
-          Logout
-        </button>
-      </nav>
+          <div>
+            <h1 style={{ fontSize:16, fontWeight:700, color:"#1a2332", letterSpacing:-0.2 }}>{active.label}</h1>
+            <p style={{ fontSize:11, color:"#9aa5b4", marginTop:1 }}>{active.desc}</p>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+            <Clock />
+            <div style={{ width:1, height:32, background:"#e2e8f0" }} />
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:13, fontWeight:600, color:"#1a2332" }}>{user.name}</div>
+              <span style={{
+                display:"inline-block", fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:10, marginTop:2,
+                background: user.role === "maintenance_engineer" ? "#dbeafe" : "#dcfce7",
+                color:      user.role === "maintenance_engineer" ? "#1d4ed8" : "#166534",
+              }}>
+                {ROLE_LABELS[user.role]}
+              </span>
+            </div>
+            <button onClick={logout} style={{ padding:"6px 14px", fontSize:12, fontWeight:500, background:"#fff", border:"1px solid #e2e8f0", borderRadius:7, cursor:"pointer", color:"#374151", fontFamily:"inherit", transition:"all 0.15s" }}>
+              Logout
+            </button>
+          </div>
+        </header>
 
-      {/* Page content */}
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-        <h2 style={{ fontSize: 20, marginBottom: 4 }}>
-          {tabs.find(t => t.id === activeTab)?.label}
-        </h2>
-        <p style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>
-          {activeTab === "kpis"   && "Summary of all asset and energy KPIs."}
-          {activeTab === "health" && "Asset health scores, RUL, MTBF, and live sensor readings."}
-          {activeTab === "energy" && "Energy consumption vs baseline, PUE, EER, and CO₂."}
-          {activeTab === "alerts" && "Active predictive alerts and acknowledged notifications."}
-        </p>
-
-        {activeTab === "kpis"   && <KpiCards />}
-        {activeTab === "health" && <HealthView  userRole={user.role} />}
-        {activeTab === "energy" && <EnergyView  userRole={user.role} />}
-        {activeTab === "alerts" && <AlertsPanel userRole={user.role} />}
-      </main>
+        <main style={{ flex:1, padding:28, maxWidth:1200, width:"100%" }}>
+          {tab === "kpis"   && <KpiCards />}
+          {tab === "health" && <HealthView  userRole={user.role} />}
+          {tab === "energy" && <EnergyView  userRole={user.role} />}
+          {tab === "alerts" && <AlertsPanel userRole={user.role} />}
+        </main>
+      </div>
     </div>
+  );
+}
+
+function LoginPage() {
+  const navigate = useNavigate();
+  return <Login onLogin={() => navigate("/", { replace:true })} />;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

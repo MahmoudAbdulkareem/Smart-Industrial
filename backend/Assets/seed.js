@@ -1,8 +1,7 @@
-// Run this ONCE after setup.sql to set proper password hashes
 // node seed.js
 
 const bcrypt = require("bcryptjs");
-const { query } = require("./db");
+const { query } = require("../DataBase/db");
 
 async function seed() {
   console.log("Seeding user passwords...");
@@ -10,6 +9,7 @@ async function seed() {
   const users = [
     { email: "maintenance@dashboard.com", password: "maintenance123" },
     { email: "energy@dashboard.com",      password: "energy123"      },
+    { email: "itadmin@dashboard.com",      password: "itadmin123"  },
   ];
 
   for (const user of users) {
@@ -24,6 +24,7 @@ async function seed() {
   console.log("Done. You can now log in with:");
   console.log("  maintenance@dashboard.com / maintenance123");
   console.log("  energy@dashboard.com / energy123");
+  console.log("  itadmin@dashboard.com / itadmin123");
   process.exit(0);
 }
 

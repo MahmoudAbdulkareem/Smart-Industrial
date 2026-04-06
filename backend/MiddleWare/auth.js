@@ -4,7 +4,6 @@ const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = "smart_dashboard_secret_2026";
 
-// Creates a signed JWT token after successful login
 function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role, name: user.name },
@@ -14,6 +13,7 @@ function generateToken(user) {
 }
 
 // Middleware — verifies token on every protected route
+
 function requireAuth(req, res, next) {
   const authHeader = req.headers["authorization"];
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -29,7 +29,6 @@ function requireAuth(req, res, next) {
   }
 }
 
-// Middleware — checks role after requireAuth
 function requireRole(role) {
   return (req, res, next) => {
     if (req.user.role !== role) {

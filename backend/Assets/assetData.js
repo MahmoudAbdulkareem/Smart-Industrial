@@ -1,6 +1,4 @@
-// assetData.js — all database operations for assets, readings, alerts, work orders
-
-const { query, queryOne } = require("./db");
+const { query, queryOne } = require("../DataBase/db");
 
 function rand(min, max) {
   return parseFloat((Math.random() * (max - min) + min).toFixed(2));
@@ -8,7 +6,7 @@ function rand(min, max) {
 
 function getStatus(score) {
   if (score >= 70) return "healthy";
-  if (score >= 40) return "caution";
+  if (score >= 50) return "caution";
   return "critical";
 }
 
@@ -20,8 +18,6 @@ const baseScores = {
   "AST-005": 42,
 };
 
-// Fallback — used only when no MQTT readings exist yet
-// Generates and inserts one reading per asset directly
 async function recordAndGetReadings() {
   const assets = await query("SELECT * FROM assets");
   const readings = [];
@@ -57,7 +53,6 @@ async function recordAndGetReadings() {
   return readings;
 }
 
-// Get latest reading per asset from SQL Server
 async function getLatestReadings() {
   const rows = await query(`
     SELECT r.asset_id, a.name, a.location,
@@ -90,7 +85,6 @@ async function getLatestReadings() {
   }));
 }
 
-// Get all alerts from SQL Server
 async function getAlerts() {
   const rows = await query(`
     SELECT al.id, al.asset_id, a.name AS asset_name,
@@ -111,7 +105,6 @@ async function getAlerts() {
   }));
 }
 
-// Acknowledge alert — sets acknowledged = 1
 async function acknowledgeAlert(alertId) {
   await query(
     "UPDATE alerts SET acknowledged = 1 WHERE id = @id",
@@ -119,7 +112,6 @@ async function acknowledgeAlert(alertId) {
   );
 }
 
-// Save work order to SQL Server
 async function saveWorkOrder(wo) {
   await query(
     `INSERT INTO work_orders (wonum, asset_id, description, status, created_by)

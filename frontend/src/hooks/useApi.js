@@ -1,27 +1,24 @@
 import { useState, useEffect, useCallback } from "react";
 
-// Gets the token from localStorage
 function getToken() {
   return localStorage.getItem("token");
 }
 
 export function useApi(endpoint, interval = 5000) {
-  const [data,    setData]    = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
+  const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
     const token = getToken();
     try {
       const res = await fetch(`/api${endpoint}`, {
         headers: {
-          // Send the token with every request
           Authorization: token ? `Bearer ${token}` : "",
         },
       });
 
       if (res.status === 401) {
-        // Token missing or expired — clear storage and reload to go to login
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         window.location.href = "/";
@@ -34,9 +31,10 @@ export function useApi(endpoint, interval = 5000) {
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      // Only show loading on the very first fetch
+      if (loading) setLoading(false);
     }
-  }, [endpoint]);
+  }, [endpoint, loading]);
 
   useEffect(() => {
     fetchData();
@@ -44,5 +42,5 @@ export function useApi(endpoint, interval = 5000) {
     return () => clearInterval(id);
   }, [fetchData, interval]);
 
-  return { data, loading, error };
+  return { data, loading, error, refresh: fetchData };
 }

@@ -1,7 +1,5 @@
-// users.js — reads users from SQL Server
-// Replaces the old hardcoded array
 
-const { queryOne } = require("./db");
+const { queryOne } = require("../DataBase/db");
 
 async function findByEmail(email) {
   return await queryOne(
