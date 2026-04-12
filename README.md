@@ -1,181 +1,55 @@
-# Smart Industrial Dashboard
+# Smart Industrial Dashboard — PFE 2026
 
-**PFE — Mahmoud Abdulkareem | ESPRIT Computer Engineering | 2025–2026**
-Predictive Maintenance & Energy Performance Management using IBM Maximo
+## Quick Start
 
----
-
-# First time setup 
-
-## 1. Install backend dependencies
-
-```bash
+### 1. Database
+Run `setup.sql` in SQL Server Management Studio against your server.
+Then seed passwords:
+```
 cd backend
 npm install
+npm run seed
 ```
 
-## 2. Fix the user passwords in SQL Server
-
-```bash
+### 2. Backend
+```
 cd backend
-node fixPasswords.js
+cp .env.example .env
+npm run dev
 ```
+Server starts on port 5000.
 
-This script updates the hashed passwords in the SQL Server `users` table.
-You only need to run it once. You can delete `fixPasswords.js` afterwards.
-
-## 3. Start the backend
-
-```bash
-cd backend
-node server.js
+### 3. Frontend
 ```
-
-Backend runs on:
-http://localhost:5000
-
-If everything is correct you should see:
-
-```
-Connected to SQL Server — SmartDashboard database
-```
-
-## 4. Start the frontend (new terminal)
-
-```bash
 cd frontend
 npm install
 npm start
 ```
-
-Frontend opens automatically at:
-http://localhost:3000
+App opens at http://localhost:3000
 
 ---
 
-# Test accounts - Examples ( Changeable )
-
-| Email                                                         | Password       | Role                 |
-| ------------------------------------------------------------- | -------------- | -------------------- |
-| [maintenance@dashboard.com](mailto:maintenance@dashboard.com) | maintenance123 | Maintenance Engineer |
-| [energy@dashboard.com](mailto:energy@dashboard.com)           | energy123      | Energy Manager       |
-
----
-
-# What each role sees ( Protected Routes )
-
-| Feature              | Maintenance Engineer | Energy Manager |
-| -------------------- | -------------------- | -------------- |
-| KPI Overview         | YES                  | YES            |
-| Health View          | YES                  | NO             |
-| Energy View          | NO                   | YES            |
-| Alerts (view)        | YES                  | YES            |
-| Acknowledge Alerts   | YES                  | NO             |
-| Create Work Orders   | YES                  | NO             |
-| Configure Thresholds | NO                   | YES            |
+## Login Accounts
+| Role | Email | Password |
+|---|---|---|
+| Maintenance Engineer | maintenance@dashboard.com | maintenance123 |
+| Energy Manager | energy@dashboard.com | energy123 |
+| IT Admin | itadmin@dashboard.com | itadmin123 |
 
 ---
 
-# Project structure
-
-```
-smart-dashboard/
-│
-├── backend/
-│   ├── server.js        → Express API (all endpoints)
-│   ├── db.js            → SQL Server connection
-│   ├── assetData.js     → Assets, readings, alerts, work orders
-│   ├── mockData.js      → Energy data (temporary mock)
-│   ├── users.js         → Users table queries
-│   ├── auth.js          → JWT auth middleware
-│   ├── fixPasswords.js  → One-time password hashing script
-│   └── package.json
-│
-└── frontend/
-    └── src/
-        ├── App.js
-        ├── index.js
-        │
-        ├── hooks/
-        │   └── useApi.js
-        │
-        └── components/
-            ├── Login.js
-            ├── KpiCards.js
-            ├── HealthView.js
-            ├── EnergyView.js
-            └── AlertsPanel.js
-```
-
-### Component description
-
-* **App.js** → authentication check, role navigation, logout
-* **useApi.js** → polling hook with JWT header
-* **Login.js** → login form (`POST /api/auth/login`)
-* **KpiCards.js** → KPI tiles (health + energy summary)
-* **HealthView.js** → asset cards + work order modal
-* **EnergyView.js** → charts + thresholds
-* **AlertsPanel.js** → alerts list + acknowledge action
+## Features
+- **Language** — EN/FR toggle on every page, persisted to localStorage
+- **Login** — 2-step email OTP verification + QR code login. When SMTP is not configured, the OTP code appears in a yellow banner (dev mode).
+- **KPI Overview** — Live asset health + energy KPIs, auto-refresh every 15s
+- **Health View** — Per-asset health scores, RUL, MTBF, sensor readings, work order creation
+- **Energy View** — Consumption vs baseline with % bars, radial gauges (PUE/EER/CO₂), 24h chart, zone metrics
+- **Alerts** — Active/acknowledged alerts with per-asset filtering and pagination
+- **User Management** — Full CRUD, role filters, status toggle, deletion countdown badge
+- **Auto-deletion** — Accounts deactivated for 24h are automatically deleted by a cron job (runs hourly). Warning emails sent on deactivation and 1h before deletion.
 
 ---
 
-# API endpoints
-
-| Method | Endpoint                    | Auth | Role        | Description          |
-| ------ | --------------------------- | ---- | ----------- | -------------------- |
-| GET    | /api/status                 | No   | Any         | API health check     |
-| POST   | /api/auth/login             | No   | Any         | Login and return JWT |
-| GET    | /api/auth/me                | Yes  | Any         | Current user         |
-| GET    | /api/assets/health          | Yes  | Any         | Asset health data    |
-| GET    | /api/energy                 | Yes  | Any         | Energy KPIs          |
-| GET    | /api/alerts                 | Yes  | Any         | All alerts           |
-| PATCH  | /api/alerts/:id/acknowledge | Yes  | Maintenance | Acknowledge alert    |
-| POST   | /api/workorders             | Yes  | Maintenance | Create work order    |
-| GET    | /api/workorders             | Yes  | Any         | Work order history   |
-| POST   | /api/thresholds             | Yes  | Energy      | Set thresholds       |
-
----
-
-# SQL Server database
-
-Database name:
-
-```
-SmartDashboard
-```
-
-Connection:
-
-```
-localhost\SQLEXPRESS
-Windows Authentication
-```
-
-### Tables
-
-* **users** → login credentials and roles
-* **assets** → industrial machines
-* **sensor_readings** → asset sensor values
-* **alerts** → predictive alerts
-* **work_orders** → created work orders
-* **energy_readings** → reserved for MQTT data (S2)
-
----
-
-# Sprint progress
-
-| Sprint | Weeks   | Status   | Description                  |
-| ------ | ------- | -------- | ---------------------------- |
-| S0     | W1–W3   | DONE     | Project setup, architecture  |
-| S1     | W4–W7   | DONE (semi)   | Auth, roles, dashboard views |
-| S2     | W5–W10  | NEXT     | MQTT energy ingestion        |
-| S3     | W7–W14  | Upcoming | IBM Maximo integration       |
-| S4     | W9–W15  | Upcoming | Python ML anomaly detection  |
-| S5     | W14–W18 | Upcoming | Auto work order engine       |
-| S6     | W19–W22 | Upcoming | PDF / Excel export           |
-| S7     | W20–W26 | Upcoming | Testing + Swagger docs       |
-| S8     | W23–W27 | Upcoming | Report + demo                |
-
----
-
----
+## SMTP Setup (optional)
+Fill in `.env` with your SMTP credentials to enable real emails.
+Without SMTP, the app uses Ethereal (test account) and prints a preview URL to the backend console.

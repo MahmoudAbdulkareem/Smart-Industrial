@@ -1,11 +1,12 @@
 
 const bcrypt = require("bcryptjs");
-const { query } = require("../db");
+const { query } = require("../DataBase/db");
 
 async function fix() {
   const h1 = bcrypt.hashSync("maintenance123", 10);
   const h2 = bcrypt.hashSync("energy123", 10);
   const h3 = bcrypt.hashSync("itadmin123", 10);
+
 
   await query(
     "UPDATE users SET password = @pw WHERE email = @email",
@@ -24,6 +25,7 @@ async function fix() {
     { pw: h3, email: "itadmin@dashboard.com" }
   );
   console.log("Updated itadmin@dashboard.com");
+
 
 
   console.log("Done — passwords are now correctly hashed.");
