@@ -1,5 +1,5 @@
-// randomDataGenerator.js
-const { query } = require("./config/db");
+
+const { query } = require("../DataBase/db");
 
 const assets = [
   { id: "AST-001", name: "Compressor Unit A", baseVib: 1.2, baseTemp: 45 },
@@ -17,39 +17,45 @@ function vary(base, range) {
   return parseFloat((base + rand(-range, range)).toFixed(2));
 }
 
-function generateAndSaveData() {
-  const time = new Date().toLocaleTimeString();
-  console.log(`[Random Generator] Publishing at ${time}`);
+function getStatus(score) {
+  if (score >= 70) return "healthy";
+  if (score >= 40) return "caution";
+  return "critical";
+}
 
-  assets.forEach(async (asset) => {
-    const vibration = vary(asset.baseVib, 0.5);
-    const temperature = vary(asset.baseTemp, 3.0);
-    const pressure = rand(1.2, 4.5);
+async function generateAndSaveData() {
+  const time = new Date().toLocaleTimeString();
+  console.log(`[Mock Publisher] Publishing at ${time}`);
+
+  for (const asset of assets) {
+    const vibration    = vary(asset.baseVib, 0.5);
+    const temperature  = vary(asset.baseTemp, 3.0);
+    const pressure     = rand(1.2, 3.1);
+    const health_score = parseFloat(rand(0, 100).toFixed(1));
+    const rul          = parseFloat((health_score / 100 * 365).toFixed(1));
+    const mtbf         = parseFloat((health_score / 100 * 1000).toFixed(1));
+    const status       = getStatus(health_score);  // ← fixed: lowercase
 
     try {
       await query(`
-        INSERT INTO sensor_readings (asset_id, vibration, temperature, pressure, recorded_at)
-        VALUES (@asset_id, @vibration, @temperature, @pressure, GETDATE())
-      `, {
-        asset_id: asset.id,
-        vibration,
-        temperature,
-        pressure
-      });
+        INSERT INTO sensor_readings
+          (asset_id, vibration, temperature, pressure, health_score, rul, mtbf, status, recorded_at)
+        VALUES
+          (@asset_id, @vibration, @temperature, @pressure, @health_score, @rul, @mtbf, @status, GETDATE())
+      `, { asset_id: asset.id, vibration, temperature, pressure, health_score, rul, mtbf, status });
 
       console.log(
         `  ${asset.id} (${asset.name}): ` +
-        `vib=${vibration} mm/s, temp=${temperature}°C, pres=${pressure} bar`
+        `vib=${vibration} mm/s  temp=${temperature}°C  pres=${pressure} bar  ` +
+        `score=${health_score}  status=${status}`
       );
     } catch (err) {
       console.error(`  Error saving ${asset.id}:`, err.message);
     }
-  });
-
+  }
   console.log("");
 }
 
-console.log("[Random Generator] Started – generating sensor data every 10 seconds\n");
+console.log("[Mock Publisher] Started — generating sensor data every 10 seconds\n");
 setInterval(generateAndSaveData, 10000);
-
 generateAndSaveData();

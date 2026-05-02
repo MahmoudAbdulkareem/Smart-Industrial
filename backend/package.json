@@ -1,22 +1,16 @@
 {
-  "name": "smart-backend",
-  "version": "1.0.0",
-  "main": "Connection/server.js",
-  "scripts": {
-    "start": "node Connection/server.js",
-    "dev": "nodemon Connection/server.js",
-    "seed": "node Assets/seed.js"
-  },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
-    "mssql": "^10.0.4",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mqtt": "^5.15.1",
+    "mssql": "^12.3.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^6.9.13"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^8.0.5",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0"
   }
 }

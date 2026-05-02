@@ -1,13 +1,16 @@
-const express  = require("express");
-const cors     = require("cors");
-const bcrypt   = require("bcryptjs");
-const cron     = require("node-cron");
+require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
+const express   = require("express");
+const cors      = require("cors");
+const bcrypt    = require("bcryptjs");
+const cron      = require("node-cron");
+const jwt       = require("jsonwebtoken");
+const speakeasy = require("speakeasy");
+const QRCode    = require("qrcode");
 
-const { getEnergyData }                                                    = require("../Assets/mockData");
-const { findByEmail }                                                      = require("../Assets/users");
-const { generateToken, requireAuth, requireRole }                          = require("../MiddleWare/auth");
+const { getEnergyData }                                                      = require("../Assets/mockData");
+const { findByEmail }                                                        = require("../Assets/users");
+const { generateToken, requireAuth, requireRole }                            = require("../MiddleWare/auth");
 const { recordAndGetReadings, getLatestReadings, getAlerts, acknowledgeAlert, saveWorkOrder } = require("../Assets/assetData");
-const { sendOTPEmail, sendDeactivationWarning, sendAccountDeletedEmail }   = require("../Assets/emailService");
 const { query, queryOne } = require("../DataBase/db");
 
 const app  = express();
@@ -15,9 +18,9 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+const pendingTotp = new Map();
 
-const otpStore = new Map();
-const qrStore  = new Map();
+const qrStore = new Map();
 
 app.get("/api/status", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
@@ -27,62 +30,149 @@ app.post("/api/auth/login", async (req, res) => {
         if (!email || !password) return res.status(400).json({ error: "Email and password required" });
 
         const user = await findByEmail(email);
-        if (!user) return res.status(401).json({ error: "Invalid email or password" });
+        if (!user)          return res.status(401).json({ error: "Invalid email or password" });
         if (!user.is_active) return res.status(403).json({ error: "Account is inactive. Contact an administrator." });
 
         const valid = bcrypt.compareSync(password, user.password);
         if (!valid) return res.status(401).json({ error: "Invalid email or password" });
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore.set(email, { code: otp, expiresAt: Date.now() + 600_000 });
+        if (!user.totp_enabled) {
+            const setupToken = jwt.sign(
+                { id: user.id, email: user.email, purpose: "totp_setup" },
+                process.env.JWT_SECRET,
+                { expiresIn: "10m" }
+            );
+            return res.json({ requiresTotpSetup: true, setupToken });
+        }
 
-        sendOTPEmail(email, user.name, otp).catch(err => console.error("OTP email error:", err.message));
-
-        const isDev = !process.env.SMTP_HOST;
-        res.json({ requiresOTP: true, email, ...(isDev && { devOTP: otp }) });
+        pendingTotp.set(email, { userId: user.id, expiresAt: Date.now() + 5 * 60 * 1000 });
+        res.json({ requiresTotp: true, email });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Server error during login" });
     }
 });
 
-app.post("/api/auth/verify-otp", async (req, res) => {
+app.post("/api/auth/verify-totp", async (req, res) => {
     try {
-        const { email, otp } = req.body;
-        if (!email || !otp) return res.status(400).json({ error: "Email and OTP required" });
+        const { email, token } = req.body;
+        if (!email || !token) return res.status(400).json({ error: "Email and token required" });
 
-        const entry = otpStore.get(email);
-        if (!entry)                   return res.status(401).json({ error: "No pending OTP for this email" });
-        if (Date.now() > entry.expiresAt) { otpStore.delete(email); return res.status(401).json({ error: "OTP expired. Please log in again." }); }
-        if (entry.code !== otp.trim()) return res.status(401).json({ error: "Invalid OTP code" });
-
-        otpStore.delete(email);
+        const pending = pendingTotp.get(email);
+        if (!pending)                    return res.status(401).json({ error: "No pending login for this email. Please log in again." });
+        if (Date.now() > pending.expiresAt) { pendingTotp.delete(email); return res.status(401).json({ error: "Session expired. Please log in again." }); }
 
         const user = await findByEmail(email);
+        if (!user || !user.totp_secret)  return res.status(401).json({ error: "TOTP not configured for this account" });
+
+        const valid = speakeasy.totp.verify({
+            secret:   user.totp_secret,
+            encoding: "base32",
+            token:    token.trim().replace(/\s/g, ""),
+            window:   1,
+        });
+
+        if (!valid) return res.status(401).json({ error: "Invalid authenticator code. Make sure your phone clock is correct." });
+
+        pendingTotp.delete(email);
         await query("UPDATE users SET last_login = GETDATE() WHERE id = @id", { id: user.id });
 
-        const token = generateToken(user);
-        res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+        const jwtToken = generateToken(user);
+        res.json({ token: jwtToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "Server error during OTP verification" });
+        res.status(500).json({ error: "Server error during TOTP verification" });
     }
 });
 
-app.post("/api/auth/resend-otp", async (req, res) => {
+app.post("/api/auth/totp-setup", async (req, res) => {
     try {
-        const { email } = req.body;
-        const user = await findByEmail(email);
-        if (!user || !user.is_active) return res.status(404).json({ error: "User not found or inactive" });
+        const { setupToken } = req.body;
+        if (!setupToken) return res.status(400).json({ error: "Setup token required" });
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore.set(email, { code: otp, expiresAt: Date.now() + 600_000 });
-        sendOTPEmail(email, user.name, otp).catch(() => {});
+        let decoded;
+        try {
+            decoded = jwt.verify(setupToken, process.env.JWT_SECRET);
+        } catch {
+            return res.status(401).json({ error: "Setup token invalid or expired. Please log in again." });
+        }
+        if (decoded.purpose !== "totp_setup") return res.status(401).json({ error: "Invalid setup token" });
 
-        const isDev = !process.env.SMTP_HOST;
-        res.json({ message: "OTP resent", ...(isDev && { devOTP: otp }) });
+        const user = await queryOne("SELECT id, name, email, totp_enabled FROM users WHERE id = @id", { id: decoded.id });
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        const secret = speakeasy.generateSecret({
+            name:   `Smart Dashboard (${user.email})`,
+            issuer: "Smart Dashboard",
+            length: 20,
+        });
+
+        await query(
+            "UPDATE users SET totp_secret = @secret, totp_enabled = 0 WHERE id = @id",
+            { secret: secret.base32, id: user.id }
+        );
+
+        const qrDataUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+        res.json({
+            secret:    secret.base32,
+            qrDataUrl,
+            otpauthUrl: secret.otpauth_url,
+        });
     } catch (err) {
-        res.status(500).json({ error: "Failed to resend OTP" });
+        console.error(err);
+        res.status(500).json({ error: "Failed to generate TOTP setup" });
+    }
+});
+
+app.post("/api/auth/totp-enable", async (req, res) => {
+    try {
+        const { setupToken, token } = req.body;
+        if (!setupToken || !token) return res.status(400).json({ error: "setupToken and token required" });
+
+        let decoded;
+        try {
+            decoded = jwt.verify(setupToken, process.env.JWT_SECRET);
+        } catch {
+            return res.status(401).json({ error: "Setup token invalid or expired. Please log in again." });
+        }
+        if (decoded.purpose !== "totp_setup") return res.status(401).json({ error: "Invalid setup token" });
+
+        const user = await queryOne(
+            "SELECT id, name, email, role, totp_secret FROM users WHERE id = @id",
+            { id: decoded.id }
+        );
+        if (!user || !user.totp_secret) return res.status(400).json({ error: "No TOTP secret found. Start setup again." });
+
+        const valid = speakeasy.totp.verify({
+            secret:   user.totp_secret,
+            encoding: "base32",
+            token:    token.trim().replace(/\s/g, ""),
+            window:   1,
+        });
+
+        if (!valid) return res.status(401).json({ error: "Code is incorrect. Make sure you scanned the QR and your phone clock is synced." });
+
+        await query("UPDATE users SET totp_enabled = 1, last_login = GETDATE() WHERE id = @id", { id: user.id });
+
+        const jwtToken = generateToken(user);
+        res.json({
+            token: jwtToken,
+            user:  { id: user.id, name: user.name, email: user.email, role: user.role },
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to enable TOTP" });
+    }
+});
+
+app.post("/api/users/:id/reset-totp", requireAuth, requireRole("it_admin"), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        await query("UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = @id", { id });
+        res.json({ message: "TOTP reset. User must set up authenticator on next login." });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to reset TOTP" });
     }
 });
 
@@ -104,19 +194,6 @@ app.get("/api/auth/qr-approve", requireAuth, async (req, res) => {
     res.send("<h2>Login approved. You can close this tab.</h2>");
 });
 
-app.get("/api/auth/qr-status", (req, res) => {
-    const { token } = req.query;
-    const entry = qrStore.get(token);
-    if (!entry)                       return res.status(404).json({ error: "Token not found" });
-    if (Date.now() > entry.expiresAt) { qrStore.delete(token); return res.status(410).json({ error: "Expired" }); }
-    if (entry.approved) {
-        const { jwt: jwtToken, user } = entry;
-        qrStore.delete(token);
-        return res.json({ approved: true, token: jwtToken, user });
-    }
-    res.json({ approved: false });
-});
-
 app.get("/api/auth/me", requireAuth, (req, res) => res.json({ user: req.user }));
 
 app.get("/api/assets/health", requireAuth, async (req, res) => {
@@ -131,47 +208,6 @@ app.get("/api/assets/health", requireAuth, async (req, res) => {
 });
 
 app.get("/api/energy", requireAuth, (req, res) => res.json(getEnergyData()));
-
-app.get("/api/energy/metrics/latest", requireAuth, async (req, res) => {
-    try {
-        const rows = await query(`
-            SELECT zone,
-                   AVG(pue)           AS pue,
-                   AVG(eer)           AS eer,
-                   AVG(co2_emissions) AS co2_emissions
-            FROM energy_metrics
-            WHERE recorded_at >= DATEADD(HOUR, -24, GETDATE())
-            GROUP BY zone
-            ORDER BY zone
-        `);
-        res.json(rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Failed to get energy metrics" });
-    }
-});
-
-app.post("/api/energy/metrics", requireAuth, requireRole("energy_manager"), async (req, res) => {
-    try {
-        const { zone, pue, eer, co2_emissions } = req.body;
-        if (!zone || pue == null || eer == null || co2_emissions == null)
-            return res.status(400).json({ error: "zone, pue, eer and co2_emissions are required" });
-
-        await query(
-            "INSERT INTO energy_metrics (zone, pue, eer, co2_emissions) VALUES (@zone, @pue, @eer, @co2)",
-            { zone, pue: parseFloat(pue), eer: parseFloat(eer), co2: parseFloat(co2_emissions) }
-        );
-        const created = await queryOne(
-            `SELECT TOP 1 id, zone, pue, eer, co2_emissions, FORMAT(recorded_at,'yyyy-MM-ddTHH:mm:ss') AS recorded_at
-             FROM energy_metrics WHERE zone = @zone ORDER BY recorded_at DESC`,
-            { zone }
-        );
-        res.status(201).json(created);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Failed to record energy metrics" });
-    }
-});
 
 app.get("/api/alerts", requireAuth, async (req, res) => {
     try { res.json(await getAlerts()); }
@@ -215,40 +251,29 @@ app.post("/api/thresholds", requireAuth, requireRole("energy_manager"), (req, re
     res.json({ message: "Threshold updated", assetId, metric, value });
 });
 
+const USER_SELECT = `
+    SELECT id, name, email, role, phone_number, totp_enabled, is_active,
+           FORMAT(created_at,     'yyyy-MM-ddTHH:mm:ss') AS created_at,
+           FORMAT(last_login,     'yyyy-MM-ddTHH:mm:ss') AS last_login,
+           FORMAT(deactivated_at, 'yyyy-MM-ddTHH:mm:ss') AS deactivated_at
+    FROM users`;
+
 app.get("/api/users", requireAuth, requireRole("it_admin"), async (req, res) => {
-    try {
-        const rows = await query(`
-            SELECT id, name, email, role, is_active,
-                   FORMAT(created_at,     'yyyy-MM-ddTHH:mm:ss') AS created_at,
-                   FORMAT(last_login,     'yyyy-MM-ddTHH:mm:ss') AS last_login,
-                   FORMAT(deactivated_at, 'yyyy-MM-ddTHH:mm:ss') AS deactivated_at
-            FROM users ORDER BY created_at DESC
-        `);
-        res.json(rows);
-    } catch (err) {
-        res.status(500).json({ error: "Failed to load users" });
-    }
+    try { res.json(await query(USER_SELECT + " ORDER BY created_at DESC")); }
+    catch (err) { res.status(500).json({ error: "Failed to load users" }); }
 });
 
 app.get("/api/users/:id", requireAuth, requireRole("it_admin"), async (req, res) => {
     try {
-        const user = await queryOne(
-            `SELECT id, name, email, role, is_active,
-                    FORMAT(created_at, 'yyyy-MM-ddTHH:mm:ss') AS created_at,
-                    FORMAT(last_login, 'yyyy-MM-ddTHH:mm:ss') AS last_login
-             FROM users WHERE id = @id`,
-            { id: parseInt(req.params.id) }
-        );
+        const user = await queryOne(USER_SELECT + " WHERE id = @id", { id: parseInt(req.params.id) });
         if (!user) return res.status(404).json({ error: "User not found" });
         res.json(user);
-    } catch (err) {
-        res.status(500).json({ error: "Failed to get user" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to get user" }); }
 });
 
 app.post("/api/users", requireAuth, requireRole("it_admin"), async (req, res) => {
     try {
-        const { name, email, role, password } = req.body;
+        const { name, email, role, password, phone_number } = req.body;
         if (!name || !email || !role || !password)
             return res.status(400).json({ error: "name, email, role and password are required" });
 
@@ -261,26 +286,18 @@ app.post("/api/users", requireAuth, requireRole("it_admin"), async (req, res) =>
 
         const hashed = bcrypt.hashSync(password, 10);
         await query(
-            "INSERT INTO users (name, email, password, role, last_login, is_active) VALUES (@name, @email, @hash, @role, GETDATE(), 1)",
-            { name, email, hash: hashed, role }
+            "INSERT INTO users (name, email, password, role, phone_number, last_login, is_active) VALUES (@name, @email, @hash, @role, @phone, GETDATE(), 1)",
+            { name, email, hash: hashed, role, phone: phone_number || null }
         );
-        const created = await queryOne(
-            `SELECT id, name, email, role, is_active,
-                    FORMAT(created_at, 'yyyy-MM-ddTHH:mm:ss') AS created_at,
-                    FORMAT(last_login, 'yyyy-MM-ddTHH:mm:ss') AS last_login
-             FROM users WHERE email = @email`,
-            { email }
-        );
+        const created = await queryOne(USER_SELECT + " WHERE email = @email", { email });
         res.status(201).json(created);
-    } catch (err) {
-        res.status(500).json({ error: "Failed to create user" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to create user" }); }
 });
 
 app.put("/api/users/:id", requireAuth, requireRole("it_admin"), async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { name, email, role, password } = req.body;
+        const { name, email, role, password, phone_number } = req.body;
         if (!name || !email || !role) return res.status(400).json({ error: "name, email and role are required" });
 
         const validRoles = ["maintenance_engineer", "energy_manager", "it_admin"];
@@ -294,24 +311,19 @@ app.put("/api/users/:id", requireAuth, requireRole("it_admin"), async (req, res)
 
         if (password) {
             await query(
-                "UPDATE users SET name = @name, email = @email, role = @role, password = @hash WHERE id = @id",
-                { name, email, role, hash: bcrypt.hashSync(password, 10), id }
+                "UPDATE users SET name=@name, email=@email, role=@role, password=@hash, phone_number=@phone WHERE id=@id",
+                { name, email, role, hash: bcrypt.hashSync(password, 10), phone: phone_number || null, id }
             );
         } else {
-            await query("UPDATE users SET name = @name, email = @email, role = @role WHERE id = @id", { name, email, role, id });
+            await query(
+                "UPDATE users SET name=@name, email=@email, role=@role, phone_number=@phone WHERE id=@id",
+                { name, email, role, phone: phone_number || null, id }
+            );
         }
 
-        const updated = await queryOne(
-            `SELECT id, name, email, role, is_active,
-                    FORMAT(created_at, 'yyyy-MM-ddTHH:mm:ss') AS created_at,
-                    FORMAT(last_login, 'yyyy-MM-ddTHH:mm:ss') AS last_login
-             FROM users WHERE id = @id`,
-            { id }
-        );
+        const updated = await queryOne(USER_SELECT + " WHERE id = @id", { id });
         res.json(updated);
-    } catch (err) {
-        res.status(500).json({ error: "Failed to update user" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to update user" }); }
 });
 
 app.patch("/api/users/:id/toggle-active", requireAuth, requireRole("it_admin"), async (req, res) => {
@@ -319,7 +331,7 @@ app.patch("/api/users/:id/toggle-active", requireAuth, requireRole("it_admin"), 
         const id = parseInt(req.params.id);
         if (req.user.id === id) return res.status(400).json({ error: "Cannot change your own active status" });
 
-        const target = await queryOne("SELECT id, role, is_active, name, email FROM users WHERE id = @id", { id });
+        const target = await queryOne("SELECT id, role, is_active, name, email, phone_number FROM users WHERE id = @id", { id });
         if (!target) return res.status(404).json({ error: "User not found" });
         if (target.role === "it_admin") return res.status(400).json({ error: "Cannot change active status of an IT Admin" });
 
@@ -327,13 +339,12 @@ app.patch("/api/users/:id/toggle-active", requireAuth, requireRole("it_admin"), 
         if (newState === 0) {
             await query("UPDATE users SET is_active = 0, deactivated_at = GETDATE() WHERE id = @id", { id });
             sendDeactivationWarning(target.email, target.name, 24).catch(() => {});
+            if (target.phone_number) sendDeactivationSmS(target.phone_number, target.name, 24).catch(() => {});
         } else {
             await query("UPDATE users SET is_active = 1, deactivated_at = NULL WHERE id = @id", { id });
         }
         res.json({ id, is_active: newState });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to toggle user status" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to toggle user status" }); }
 });
 
 app.delete("/api/users/:id", requireAuth, requireRole("it_admin"), async (req, res) => {
@@ -341,31 +352,28 @@ app.delete("/api/users/:id", requireAuth, requireRole("it_admin"), async (req, r
         const id = parseInt(req.params.id);
         if (req.user.id === id) return res.status(400).json({ error: "Cannot delete your own account" });
 
-        const target = await queryOne("SELECT id, role, name, email FROM users WHERE id = @id", { id });
+        const target = await queryOne("SELECT id, role, name, email, phone_number FROM users WHERE id = @id", { id });
         if (!target) return res.status(404).json({ error: "User not found" });
         if (target.role === "it_admin") return res.status(400).json({ error: "Cannot delete an IT Admin account" });
 
         await query("DELETE FROM users WHERE id = @id", { id });
         sendAccountDeletedEmail(target.email, target.name).catch(() => {});
+        if (target.phone_number) sendAccountDeletedSms(target.phone_number, target.name).catch(() => {});
         res.json({ message: "User deleted", id });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to delete user" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to delete user" }); }
 });
 
 app.get("/api/users/inactive-check", requireAuth, requireRole("it_admin"), async (req, res) => {
     try {
         const rows = await query(`
-            SELECT id, name, email, role, is_active,
+            SELECT id, name, email, role, phone_number, is_active,
                    FORMAT(last_login, 'yyyy-MM-ddTHH:mm:ss') AS last_login
             FROM users
             WHERE (last_login IS NULL OR last_login < DATEADD(MONTH, -6, GETDATE()))
               AND is_active = 1
         `);
         res.json(rows);
-    } catch (err) {
-        res.status(500).json({ error: "Failed to check inactive users" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to check inactive users" }); }
 });
 
 app.post("/api/users/mark-inactive", requireAuth, requireRole("it_admin"), async (req, res) => {
@@ -377,39 +385,38 @@ app.post("/api/users/mark-inactive", requireAuth, requireRole("it_admin"), async
               AND is_active = 1 AND role <> 'it_admin'
         `);
         res.json({ message: "Inactive users marked successfully" });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to mark inactive users" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to mark inactive users" }); }
 });
 
 cron.schedule("0 * * * *", async () => {
     try {
         const toDelete = await query(`
-            SELECT id, name, email FROM users
-            WHERE is_active = 0
-              AND deactivated_at IS NOT NULL
+            SELECT id, name, email, phone_number FROM users
+            WHERE is_active = 0 AND deactivated_at IS NOT NULL
               AND deactivated_at <= DATEADD(HOUR, -24, GETDATE())
               AND role <> 'it_admin'
         `);
         for (const u of toDelete) {
             await query("DELETE FROM users WHERE id = @id", { id: u.id });
             sendAccountDeletedEmail(u.email, u.name).catch(() => {});
+            if (u.phone_number) sendAccountDeletedSms(u.phone_number, u.name).catch(() => {});
             console.log("Auto-deleted inactive user:", u.email);
         }
         const soonToDelete = await query(`
-            SELECT id, name, email FROM users
-            WHERE is_active = 0
-              AND deactivated_at IS NOT NULL
+            SELECT id, name, email, phone_number FROM users
+            WHERE is_active = 0 AND deactivated_at IS NOT NULL
               AND deactivated_at <= DATEADD(HOUR, -23, GETDATE())
               AND deactivated_at >  DATEADD(HOUR, -24, GETDATE())
               AND role <> 'it_admin'
         `);
         for (const u of soonToDelete) {
             sendDeactivationWarning(u.email, u.name, 1).catch(() => {});
+            if (u.phone_number) sendDeactivationSmS(u.phone_number, u.name, 1).catch(() => {});
         }
-    } catch (err) {
-        console.error("Cron auto-delete error:", err.message);
-    }
+    } catch (err) { console.error("Cron auto-delete error:", err.message); }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+const { startMqttListener } = require("../Assets/mqtt");
+startMqttListener();

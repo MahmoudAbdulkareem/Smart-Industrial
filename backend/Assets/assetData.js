@@ -1,3 +1,4 @@
+
 const { query, queryOne } = require("../DataBase/db");
 
 function rand(min, max) {
@@ -41,18 +42,12 @@ async function recordAndGetReadings() {
         );
 
         readings.push({
-            id: asset.id,
-            name: asset.name,
-            location: asset.location,
-            healthScore,
-            rul,
-            mtbf,
-            status,
+            id: asset.id, name: asset.name, location: asset.location,
+            healthScore, rul, mtbf, status,
             anomalyDetected: healthScore < 40,
             sensors: { vibration, temperature, pressure },
         });
     }
-
     return readings;
 }
 
@@ -77,7 +72,7 @@ async function getLatestReadings() {
         healthScore:    parseFloat(r.health_score),
         rul:            parseFloat(r.rul),
         mtbf:           parseFloat(r.mtbf),
-        status:         r.status,
+        status:         (r.status || "healthy").toLowerCase().replace("warning", "caution"),
         anomalyDetected: parseFloat(r.health_score) < 40,
         sensors: {
             vibration:   parseFloat(r.vibration),
@@ -100,7 +95,7 @@ async function getAlerts() {
         id:           r.id,
         assetId:      r.asset_id,
         asset:        r.asset_name,
-        severity:     r.severity,
+        severity:     (r.severity || "info").toLowerCase(),
         message:      r.message,
         acknowledged: r.acknowledged === true || r.acknowledged === 1,
         time:         timeAgo(r.created_at),
@@ -108,7 +103,10 @@ async function getAlerts() {
 }
 
 async function acknowledgeAlert(alertId) {
-    await query("UPDATE alerts SET acknowledged = 1, acknowledged_at = GETDATE() WHERE id = @id", { id: alertId });
+    await query(
+        "UPDATE alerts SET acknowledged = 1, acknowledged_at = GETDATE() WHERE id = @id",
+        { id: alertId }
+    );
 }
 
 async function saveWorkOrder(wo) {

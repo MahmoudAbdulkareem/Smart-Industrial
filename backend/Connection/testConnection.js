@@ -61,7 +61,7 @@ async function test4() {
       server: "localhost\\SQLEXPRESS",
       database: "SmartDashboard",
       user: "sa",
-      password: "YourPassword",
+      password: "Pass123",
       options: {
         trustServerCertificate: true,
         encrypt: false,

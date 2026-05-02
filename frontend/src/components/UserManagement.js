@@ -59,7 +59,7 @@ function Field({ label, error, children }) {
 function UserFormModal({ user, onClose, onSaved }) {
     const { t } = useLanguage();
     const isEdit = !!user;
-    const [form,   setForm]   = useState({ name: user?.name || "", email: user?.email || "", role: user?.role || "", password: "" });
+    const [form,   setForm]   = useState({ name: user?.name || "", email: user?.email || "", role: user?.role || "", password: "", phone_number: user?.phone_number || "" });
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
     const [apiErr, setApiErr] = useState(null);
@@ -80,7 +80,7 @@ function UserFormModal({ user, onClose, onSaved }) {
         const e = validate();
         if (Object.keys(e).length) { setErrors(e); return; }
         setSaving(true); setApiErr(null);
-        const body = { name: form.name, email: form.email, role: form.role };
+        const body = { name: form.name, email: form.email, role: form.role, phone_number: form.phone_number || null };
         if (form.password) body.password = form.password;
         try {
             const res = await fetch(isEdit ? `/api/users/${user.id}` : "/api/users", {
@@ -117,6 +117,10 @@ function UserFormModal({ user, onClose, onSaved }) {
             </Field>
             <Field label={isEdit ? t("fieldPasswordEdit") : t("fieldPassword")} error={errors.password}>
                 <input type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder={t("placeholderPassword")} style={{ ...inp, borderColor: errors.password ? "#fca5a5" : "#d1d9e6" }} />
+            </Field>
+            <Field label="Phone Number (optional)">
+                <input type="tel" value={form.phone_number} onChange={e => set("phone_number", e.target.value)} placeholder="+216 XX XXX XXX" style={{ ...inp }} />
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9aa5b4" }}>Used for SMS notifications (OTP, account alerts). Include country code.</p>
             </Field>
             {apiErr && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>⚠ {apiErr}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
@@ -180,6 +184,13 @@ function DetailModal({ user, onClose }) {
             </div>
             <Row label="ID">#{user.id}</Row>
             <Row label={t("fieldRole")}><span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: badge.bg, color: badge.color }}>{t("roles")[user.role] || user.role}</span></Row>
+            <Row label="Phone">{user.phone_number ? <span style={{ display: "flex", alignItems: "center", gap: 5 }}>📱 {user.phone_number}</span> : <span style={{ color: "#d1d9e6" }}>Not set</span>}</Row>
+            <Row label="2FA (Authenticator)">
+                {user.totp_enabled
+                    ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>🔐 Enabled</span>
+                    : <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" }}>⚠ Not set up</span>
+                }
+            </Row>
             <Row label={t("statusCol")}><span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: user.is_active ? "#dcfce7" : "#fef2f2", color: user.is_active ? "#166534" : "#b91c1c" }}>{user.is_active ? t("activeStatus") : t("inactiveStatus")}</span></Row>
             <Row label={t("createdAt")}>{user.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}</Row>
             <Row label={t("lastLogin")}>
@@ -188,8 +199,22 @@ function DetailModal({ user, onClose }) {
                     {stale && user.is_active && <span style={{ marginLeft: 6, fontSize: 10, color: "#dc2626", fontWeight: 600 }}>⚠ {t("inactiveWarning")}</span>}
                 </span>
             </Row>
-            <div style={{ marginTop: 20, textAlign: "right" }}>
-                <button onClick={onClose} style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600, background: "#1d6fcc", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("close")}</button>
+            <div style={{ marginTop: 20, display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center" }}>
+                {user.totp_enabled && (
+                    <button
+                        onClick={async () => {
+                            if (!window.confirm(`Reset 2FA for ${user.name}? They will be asked to set up Google Authenticator again on next login.`)) return;
+                            try {
+                                const res = await fetch(`/api/users/${user.id}/reset-totp`, { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
+                                if (res.ok) { alert("2FA reset. User must re-scan QR on next login."); onClose(); }
+                                else { const j = await res.json(); alert(j.error || "Reset failed"); }
+                            } catch { alert("Cannot connect to server"); }
+                        }}
+                        style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, background: "#fff7ed", border: "1px solid #fed7aa", color: "#c2410c", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>
+                        🔄 Reset 2FA
+                    </button>
+                )}
+                <button onClick={onClose} style={{ marginLeft: "auto", padding: "8px 20px", fontSize: 13, fontWeight: 600, background: "#1d6fcc", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("close")}</button>
             </div>
         </Modal>
     );
@@ -198,7 +223,7 @@ function DetailModal({ user, onClose }) {
 function SkeletonRow() {
     return (
         <tr>
-            {[...Array(7)].map((_, i) => (
+            {[...Array(8)].map((_, i) => (
                 <td key={i} style={{ padding: "13px 16px" }}>
                     <div style={{ height: 14, background: "#f0f4f8", borderRadius: 4, width: i === 0 ? 24 : i === 6 ? 80 : "80%", animation: "pulse 1.4s ease-in-out infinite" }} />
                 </td>
@@ -320,10 +345,7 @@ export default function UserManagement() {
                     </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <button onClick={() => setLanguage(language === "en" ? "fr" : "en")}
-                        style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, border: "1px solid #d1d9e6", borderRadius: 7, background: "#f8faff", color: "#374151", cursor: "pointer", fontFamily: "inherit" }}>
-                        🌐 {t("lang")}
-                    </button>
+                   
                     {staleCount > 0 && (
                         <button onClick={handleMarkInactive} disabled={markingInactive} title={t("markInactiveDesc")}
                             style={{ ...btnS, display: "flex", alignItems: "center", gap: 6, borderColor: "#fde68a", color: "#92400e", background: "#fef9ec", fontSize: 12, opacity: markingInactive ? 0.6 : 1 }}>
@@ -339,7 +361,7 @@ export default function UserManagement() {
 
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: "1 1 220px" }}>
-                    <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#9aa5b4", fontSize: 14 }}>🔍</span>
+                    <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#9aa5b4", fontSize: 14 }}></span>
                     <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("searchPlaceholder")}
                         style={{ ...inp, paddingLeft: 32, width: "100%", maxWidth: 320, boxSizing: "border-box" }} />
                 </div>
@@ -378,8 +400,8 @@ export default function UserManagement() {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: "#f8faff", borderBottom: "1px solid #e2e8f0" }}>
-                                {["#", t("name"), t("email"), t("role"), t("statusCol"), t("lastLogin"), t("actions")].map((col, i) => (
-                                    <th key={i} style={{ padding: "11px 16px", textAlign: i === 6 ? "right" : "left", fontSize: 11, fontWeight: 600, color: "#6b7a99", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
+                                {["#", t("name"), t("email"), "Phone", t("role"), t("statusCol"), t("lastLogin"), t("actions")].map((col, i) => (
+                                    <th key={i} style={{ padding: "11px 16px", textAlign: i === 7 ? "right" : "left", fontSize: 11, fontWeight: 600, color: "#6b7a99", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
                                         {col}
                                     </th>
                                 ))}
@@ -389,9 +411,9 @@ export default function UserManagement() {
                             {loading ? (
                                 [...Array(5)].map((_, i) => <SkeletonRow key={i} />)
                             ) : error ? (
-                                <tr><td colSpan={7} style={{ padding: "32px 16px", textAlign: "center", color: "#dc2626", fontSize: 13 }}>⚠ {error}</td></tr>
+                                <tr><td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "#dc2626", fontSize: 13 }}>⚠ {error}</td></tr>
                             ) : paginated.length === 0 ? (
-                                <tr><td colSpan={7} style={{ padding: "32px 16px", textAlign: "center", color: "#9aa5b4", fontSize: 13 }}>{t("noUsers")}</td></tr>
+                                <tr><td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "#9aa5b4", fontSize: 13 }}>{t("noUsers")}</td></tr>
                             ) : paginated.map((u, idx) => {
                                 const badge   = ROLE_BADGE[u.role] || { bg: "#f3f4f6", color: "#374151" };
                                 const initials = u.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
@@ -413,6 +435,9 @@ export default function UserManagement() {
                                             </div>
                                         </td>
                                         <td style={{ padding: "13px 16px", color: "#6b7a99" }}>{u.email}</td>
+                                        <td style={{ padding: "13px 16px", color: "#6b7a99", fontSize: 12, whiteSpace: "nowrap" }}>
+                                            {u.phone_number ? <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 10 }}>📱</span>{u.phone_number}</span> : <span style={{ color: "#d1d9e6" }}>—</span>}
+                                        </td>
                                         <td style={{ padding: "13px 16px" }}>
                                             <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 999, background: badge.bg, color: badge.color, whiteSpace: "nowrap" }}>
                                                 {t("roles")[u.role] || u.role}

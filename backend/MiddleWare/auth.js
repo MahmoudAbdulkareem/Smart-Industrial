@@ -4,7 +4,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "smart_dashboard_secret_2026";
 
 function generateToken(user) {
     return jwt.sign(
-        { id: user.id, email: user.email, role: user.role, name: user.name },
+        { id: user.id, name: user.name, role: user.role, email: user.email },
         JWT_SECRET,
         { expiresIn: "8h" }
     );

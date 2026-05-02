@@ -7,6 +7,7 @@ import HealthView     from "./components/HealthView";
 import EnergyView     from "./components/EnergyView";
 import AlertsPanel    from "./components/AlertsPanel";
 import UserManagement from "./components/UserManagement";
+import Chatbot        from "./components/Chatbot";
 import { LanguageProvider, useLanguage } from "./context/LanguageContext";
 
 const ROLE_NAV = {
@@ -64,6 +65,7 @@ function Dashboard() {
         user:   t("userManagement"),
     };
 
+    
     const navDescs = {
         kpis:   "Summary of all asset and energy KPIs.",
         health: "Asset health scores, RUL, MTBF, and live sensor readings.",
@@ -171,6 +173,7 @@ function Dashboard() {
                     {tab === "user"   && <UserManagement />}
                 </main>
             </div>
+            <Chatbot />
         </div>
     );
 }
