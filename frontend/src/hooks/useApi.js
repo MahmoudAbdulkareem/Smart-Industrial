@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSocket } from "./useSocket";
 
 export function useApi(path, interval = 0) {
     const [data,    setData]    = useState(null);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState(null);
+    const pathRef = useRef(path);
 
     const fetch_ = useCallback(async () => {
         try {
@@ -12,14 +14,79 @@ export function useApi(path, interval = 0) {
                 headers: { Authorization: token ? "Bearer " + token : "" },
             });
             if (!res.ok) throw new Error(await res.text());
-            setData(await res.json());
+            const result = await res.json();
+            setData(result);
             setError(null);
+            return result;
         } catch (e) {
             setError(e.message);
         } finally {
             setLoading(false);
         }
     }, [path]);
+
+    useSocket({
+        "sensor:reading": (update) => {
+            if (path === "/assets/health" && update) {
+                setData(prev => {
+                    if (!Array.isArray(prev)) return prev;
+                    return prev.map(asset => 
+                        asset.id === update.assetId
+                            ? {
+                                ...asset,
+                                healthScore: update.healthScore ?? asset.healthScore,
+                                rul: update.rul ?? asset.rul,
+                                status: update.status ?? asset.status,
+                                vibration: update.sensors?.vibration ?? asset.vibration,
+                                temperature: update.sensors?.temperature ?? asset.temperature,
+                                pressure: update.sensors?.pressure ?? asset.pressure,
+                                sensors: update.sensors || asset.sensors,
+                                lastUpdate: update.timestamp
+                            }
+                            : asset
+                    );
+                });
+                console.log(`[API] Real-time update for ${update.assetId}: score=${update.healthScore}`);
+            }
+        },
+        
+        "energy:update": (update) => {
+            if (path === "/energy" && update) {
+                setData(prev => ({
+                    ...prev,
+                    current: update.current,
+                    baseline: update.baseline,
+                    water: update.water,
+                    gas: update.gas,
+                    kpis: update.kpis,
+                    _updatedAt: new Date().toISOString()
+                }));
+                console.log(`[API] Real-time energy update: PUE=${update.kpis?.pue}`);
+            }
+        },
+        
+        "health:update": (update) => {
+            if (path === "/assets/health" && update) {
+                setData(prev => {
+                    if (!Array.isArray(prev)) return prev;
+                    return prev.map(asset =>
+                        asset.id === update.assetId
+                            ? { ...asset, ...update }
+                            : asset
+                    );
+                });
+            }
+        },
+        
+        "alert:new": (alert) => {
+            if (path === "/alerts") {
+                setData(prev => {
+                    if (!Array.isArray(prev)) return prev;
+                    return [alert, ...prev];
+                });
+            }
+        }
+    });
 
     useEffect(() => {
         fetch_();
@@ -29,5 +96,5 @@ export function useApi(path, interval = 0) {
         }
     }, [fetch_, interval]);
 
-    return { data, loading, error, refresh: fetch_ };
+    return { data, loading, error, refresh: fetch_, setData };
 }

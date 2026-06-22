@@ -140,7 +140,7 @@ function ConfirmDeleteModal({ user, onClose, onConfirm }) {
     return (
         <Modal onClose={onClose}>
             <div style={{ textAlign: "center", padding: "8px 0 20px" }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🗑️</div>
+                <div style={{ fontSize: 44, marginBottom: 12 }}></div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a2332", marginBottom: 8 }}>{t("confirmDelete")}</h3>
                 <p style={{ fontSize: 13, color: "#6b7a99", marginBottom: 4 }}>{user.name} — {user.email}</p>
                 <p style={{ fontSize: 12, color: "#9aa5b4", marginBottom: 24 }}>{t("confirmDeleteSub")}</p>
@@ -184,7 +184,6 @@ function DetailModal({ user, onClose }) {
             </div>
             <Row label="ID">#{user.id}</Row>
             <Row label={t("fieldRole")}><span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: badge.bg, color: badge.color }}>{t("roles")[user.role] || user.role}</span></Row>
-            <Row label="Phone">{user.phone_number ? <span style={{ display: "flex", alignItems: "center", gap: 5 }}>📱 {user.phone_number}</span> : <span style={{ color: "#d1d9e6" }}>Not set</span>}</Row>
             <Row label="2FA (Authenticator)">
                 {user.totp_enabled
                     ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>🔐 Enabled</span>
@@ -349,7 +348,7 @@ export default function UserManagement() {
                     {staleCount > 0 && (
                         <button onClick={handleMarkInactive} disabled={markingInactive} title={t("markInactiveDesc")}
                             style={{ ...btnS, display: "flex", alignItems: "center", gap: 6, borderColor: "#fde68a", color: "#92400e", background: "#fef9ec", fontSize: 12, opacity: markingInactive ? 0.6 : 1 }}>
-                            ⏰ {t("markInactiveBtn")}
+                             {t("markInactiveBtn")}
                             <span style={{ background: "#f59e0b", color: "#fff", borderRadius: 999, fontSize: 10, fontWeight: 700, padding: "1px 6px" }}>{staleCount}</span>
                         </button>
                     )}
@@ -378,7 +377,7 @@ export default function UserManagement() {
                         </button>
                     ))}
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                     {[
                         { val: "all",      label: t("filterAllStatus") },
                         { val: "active",   label: t("filterActive") },
@@ -436,7 +435,7 @@ export default function UserManagement() {
                                         </td>
                                         <td style={{ padding: "13px 16px", color: "#6b7a99" }}>{u.email}</td>
                                         <td style={{ padding: "13px 16px", color: "#6b7a99", fontSize: 12, whiteSpace: "nowrap" }}>
-                                            {u.phone_number ? <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 10 }}>📱</span>{u.phone_number}</span> : <span style={{ color: "#d1d9e6" }}>—</span>}
+                                            {u.phone_number ? <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 10 }}></span>{u.phone_number}</span> : <span style={{ color: "#d1d9e6" }}>—</span>}
                                         </td>
                                         <td style={{ padding: "13px 16px" }}>
                                             <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 999, background: badge.bg, color: badge.color, whiteSpace: "nowrap" }}>
@@ -450,7 +449,7 @@ export default function UserManagement() {
                                                 </span>
                                                 {hrs !== null && (
                                                     <div style={{ fontSize: 10, color: hrs <= 2 ? "#dc2626" : "#f59e0b", fontWeight: 600, marginTop: 3, whiteSpace: "nowrap" }}>
-                                                        ⏰ {hrs <= 0 ? "Deleting…" : `~${hrs}${t("hoursUntilDeletion")}`}
+                                                          {hrs <= 0 ? "Deleting…" : `~${hrs}${t("hoursUntilDeletion")}`}
                                                     </div>
                                                 )}
                                             </div>

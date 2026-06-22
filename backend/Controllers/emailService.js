@@ -1,35 +1,7 @@
-/**
- * emailService.js — Brevo (formerly Sendinblue) SMTP
- *
- * WHY BREVO:
- *   - Gmail OAuth blocked: app unverified (access_denied)
- *   - Gmail App Passwords blocked: managed/workspace account
- *   - Brevo: free tier, 300 emails/day, works with ANY gmail address as sender
- *     No Google restrictions. No domain needed.
- *
- * SETUP (takes 3 minutes):
- *   1. Create free account at https://app.brevo.com
- *   2. Go to: Settings → SMTP & API → SMTP tab
- *   3. Copy: Login (your Brevo email) and Master Password
- *      OR generate a new SMTP password on that page
- *   4. Add to backend/.env:
- *        BREVO_SMTP_USER=your_brevo_login_email
- *        BREVO_SMTP_PASS=your_brevo_smtp_password
- *        MAIL_FROM_NAME=Smart Dashboard
- *        MAIL_FROM_ADDRESS=negamex4274@gmail.com   ← shows as sender in inbox
- *
- * BREVO SMTP SETTINGS (already hardcoded below):
- *   Host: smtp-relay.brevo.com
- *   Port: 587
- *   Encryption: STARTTLS
- */
-
 require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
 const nodemailer = require("nodemailer");
 
-// ─────────────────────────────────────────────────────────────────────────────
 function buildTransporter() {
-    // Brevo SMTP
     if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
         console.log("[Email] Using Brevo SMTP →", process.env.BREVO_SMTP_USER);
         return nodemailer.createTransport({
@@ -43,7 +15,6 @@ function buildTransporter() {
         });
     }
 
-    // Generic SMTP fallback (Office365, etc.)
     if (process.env.SMTP_HOST) {
         console.log("[Email] Using SMTP:", process.env.SMTP_HOST);
         return nodemailer.createTransport({
@@ -54,14 +25,13 @@ function buildTransporter() {
         });
     }
 
-    return null; // dev fallback handled below
+    return null; 
 }
 
 async function getTransporter() {
     const t = buildTransporter();
     if (t) return t;
 
-    // Ethereal dev fallback — catches emails, nothing really sent
     const test = await nodemailer.createTestAccount();
     console.log("[Email] ⚠ DEV MODE — no BREVO_SMTP_USER set. Using Ethereal (fake inbox).");
     console.log("[Email] Set BREVO_SMTP_USER + BREVO_SMTP_PASS in backend/.env to send real emails.");
@@ -77,7 +47,6 @@ function getFrom() {
     return `"${name}" <${address}>`;
 }
 
-// ── HTML template ─────────────────────────────────────────────────────────────
 function buildHtml(title, accentColor, bodyHtml) {
     return `<!DOCTYPE html>
 <html lang="en">
@@ -116,7 +85,6 @@ function buildHtml(title, accentColor, bodyHtml) {
 </html>`;
 }
 
-// ── Senders ───────────────────────────────────────────────────────────────────
 
 async function sendOTPEmail(toEmail, toName, otp) {
     const t = await getTransporter();

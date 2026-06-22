@@ -185,7 +185,7 @@ function Message({ msg }) {
                     background: "linear-gradient(135deg,#1d6fcc,#2563eb)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 15, flexShrink: 0, boxShadow: "0 2px 8px rgba(29,111,204,0.3)",
-                }}>🤖</div>
+                }}></div>
             )}
             <div style={{
                 maxWidth: "80%",
@@ -203,7 +203,7 @@ function Message({ msg }) {
     );
 }
 
-const WELCOME = "Hi! I'm your Smart Dashboard Assistant 👋\n\nI can help you with:\n• Understanding asset health scores, RUL & MTBF\n• Energy KPIs (PUE, EER, CO₂)\n• How to export data to PDF, Excel, or CSV\n• User management and notifications\n• Anything else about this platform\n\nWhat can I help you with?";
+const WELCOME = "Hi! I'm your Smart Dashboard Assistant \n\nI can help you with:\n• Understanding asset health scores, RUL & MTBF\n• Energy KPIs (PUE, EER, CO₂)\n• How to export data to PDF, Excel, or CSV\n• User management and notifications\n• Anything else about this platform\n\nWhat can I help you with?";
 
 const SUGGESTIONS = [
     "What does health score mean?",
@@ -262,7 +262,7 @@ export default function Chatbot() {
         setError(null);
     }
 
-    function useSuggestion(s) {
+    function handleSuggestion(s) {
         setInput(s);
         inputRef.current?.focus();
     }
@@ -321,12 +321,6 @@ export default function Chatbot() {
                         display: "flex", alignItems: "center", gap: 12,
                         flexShrink: 0,
                     }}>
-                        <div style={{
-                            width: 40, height: 40, borderRadius: "50%",
-                            background: "rgba(255,255,255,0.2)",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 20, flexShrink: 0,
-                        }}>🤖</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Dashboard Assistant</div>
                             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 1 }}>
@@ -350,7 +344,7 @@ export default function Chatbot() {
                         {messages.map((m, i) => <Message key={i} msg={m} />)}
                         {loading && (
                             <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginBottom: 12 }}>
-                                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#1d6fcc,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>🤖</div>
+                                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#1d6fcc,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}></div>
                                 <div style={{ background: "#f8faff", border: "1px solid #e2e8f0", borderRadius: "16px 16px 16px 4px" }}><TypingDots /></div>
                             </div>
                         )}
@@ -367,7 +361,7 @@ export default function Chatbot() {
                             {SUGGESTIONS.map(s => (
                                 <button
                                     key={s}
-                                    onClick={() => useSuggestion(s)}
+                                    onClick={() => handleSuggestion(s)}
                                     style={{
                                         fontSize: 11, padding: "4px 10px", borderRadius: 20,
                                         border: "1px solid #d1d9e6", background: "#f8faff",

@@ -1,0 +1,102 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage: docker compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  ml-service:
+    build:
+      context: ./ml-service
+    container_name: smart-ml
+    restart: unless-stopped
+    environment:
+      ALLOWED_ORIGINS: "http://localhost:3000,http://frontend"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - smart-net
+
+  backend:
+    build:
+      context: ./backend
+    container_name: smart-backend
+    restart: unless-stopped
+    depends_on:
+      ml-service:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-smartdashboard_dev_secret_2026}
+      DB_SERVER: ${DB_SERVER:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_DATABASE: ${DB_DATABASE:-SmartDashboard}
+      DB_USER: ${DB_USER:-dashboarduser}
+      DB_PASSWORD: ${DB_PASSWORD:-Dashboard@2026}
+      MQTT_BROKER_URL: mqtt://mosquitto:1883
+      ML_SERVICE_URL: http://ml-service:8000/predict
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 25s
+    networks:
+      - smart-net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:5000}
+        REACT_APP_SOCKET_URL: ${REACT_APP_SOCKET_URL:-http://localhost:5000}
+    container_name: smart-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - smart-net
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: smart-mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.log:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+      - mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "healthcheck", "-m", "ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smart-net
+
+networks:
+  smart-net:
+    driver: bridge
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:

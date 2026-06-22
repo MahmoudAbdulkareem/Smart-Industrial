@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { useApi } from "../hooks/useApi";
 import { useLanguage } from "../context/LanguageContext";
+import { useSocket } from "../hooks/useSocket";
 
 function getToken() { return localStorage.getItem("token"); }
 
@@ -42,34 +43,41 @@ function exportExcel(data, filename) {
     URL.revokeObjectURL(url);
 }
 
-function exportPDF(tableRef, filename) {
-    const printWin = window.open("", "_blank");
-    const html = `<!DOCTYPE html><html><head><title>${filename}</title>
-    <style>body{font-family:Inter,Arial,sans-serif;padding:24px;color:#1a2332}h2{font-size:18px;margin-bottom:16px}
-    table{width:100%;border-collapse:collapse;font-size:12px}th{background:#1d6fcc;color:#fff;padding:9px 12px;text-align:left}
-    td{padding:8px 12px;border-bottom:1px solid #e2e8f0}tr:nth-child(even){background:#f8faff}
-    @media print{body{padding:0}}</style></head><body>
-    <h2>${filename}</h2>${tableRef.current?.outerHTML || ""}<script>window.onload=()=>{window.print();window.close()}</script>
-    </body></html>`;
-    printWin.document.write(html);
-    printWin.document.close();
+function downloadReport(format) {
+    const token = localStorage.getItem("token");
+    const url = `/api/reports/energy?format=${format}`;
+    fetch(url, { headers: { Authorization: "Bearer " + token } })
+        .then(r => r.blob())
+        .then(blob => {
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `energy-report-${new Date().toISOString().slice(0,10)}.${format === "excel" ? "xls" : "html"}`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        })
+        .catch(e => alert("Report download failed: " + e.message));
 }
 
-function ExportBar({ data, tableRef, filename }) {
+function ExportBar({ data, tableRef, filename, showReport = false }) {
     return (
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <span style={{ fontSize: 11, color: "#9aa5b4", fontWeight: 500 }}>Export:</span>
-            {[
-                { label: "Excel", color: "#166534", bg: "#f0fdf4", action: () => exportExcel(data, filename) },
-                { label: "CSV",   color: "#1d4ed8", bg: "#eff6ff", action: () => exportCSV(data, filename) },
-            ].map(b => (
-                <button key={b.label} onClick={b.action}
-                    style={{ padding: "4px 11px", fontSize: 11, fontWeight: 600, borderRadius: 6,
-                        border: "1px solid " + b.color + "40", background: b.bg, color: b.color,
-                        cursor: "pointer", fontFamily: "inherit" }}>
-                    ↓ {b.label}
-                </button>
-            ))}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+           
+            {showReport && (
+                <>
+                    <button onClick={() => downloadReport("html")}
+                        style={{ padding: "4px 11px", fontSize: 11, fontWeight: 600, borderRadius: 6,
+                            border: "1px solid #d97706" + "40", background: "#fffbeb", color: "#b45309",
+                            cursor: "pointer", fontFamily: "inherit" }}>
+                        ↓ Report (HTML)
+                    </button>
+                    <button onClick={() => downloadReport("excel")}
+                        style={{ padding: "4px 11px", fontSize: 11, fontWeight: 600, borderRadius: 6,
+                            border: "1px solid #15803d40", background: "#f0fdf4", color: "#166534",
+                            cursor: "pointer", fontFamily: "inherit" }}>
+                        ↓ Report (Excel)
+                    </button>
+                </>
+            )}
         </div>
     );
 }
@@ -168,7 +176,7 @@ function OverallEnergyReview({ kpis, elecP, waterP, gasP, current, water, gas, b
             value: kpis.pue.toFixed(2),
             unit: "",
             caption: pueff >= 60 ? "Within target (≤ 1.5)" : "Above target (≤ 1.5)",
-            icon: "⚡",
+            icon: "",
         },
         {
             key: "eer",
@@ -179,7 +187,7 @@ function OverallEnergyReview({ kpis, elecP, waterP, gasP, current, water, gas, b
             value: kpis.eer.toFixed(2),
             unit: "",
             caption: "Higher is better",
-            icon: "❄️",
+            icon: "",
         },
         {
             key: "co2",
@@ -190,7 +198,7 @@ function OverallEnergyReview({ kpis, elecP, waterP, gasP, current, water, gas, b
             value: kpis.co2.toFixed(1),
             unit: " kg/h",
             caption: co2Over ? `+${co2P}% over target` : `-${co2P}% under target`,
-            icon: "🌿",
+            icon: "",
         },
     ];
 
@@ -258,11 +266,68 @@ function OverallEnergyReview({ kpis, elecP, waterP, gasP, current, water, gas, b
 
 export default function EnergyView({ userRole }) {
     const { t } = useLanguage();
-    const { data, loading, error } = useApi("/energy", 15000);
+    const { data, loading, error, refresh, setData } = useApi("/energy", 15000);
     const [thresholdMsg, setThresholdMsg] = useState("");
+    const [lastUpdate, setLastUpdate] = useState(null);
     
     const histTableRef = useRef(null);
     const fullTableRef = useRef(null);
+
+    useSocket({
+        "energy:update": (update) => {
+            if (update) {
+                setLastUpdate(new Date());
+                setData(prev => {
+                    if (!prev) return prev;
+
+                    // 1. Clone the existing history array
+                    const updatedHistory = [...(prev.history || [])];
+                    
+                    // 2. Format current hour label (e.g., "20:00") or match chart format
+                    const now = new Date();
+                    const currentHourStr = `${String(now.getHours()).padStart(2, '0')}:00`;
+
+                    if (updatedHistory.length > 0) {
+                        // Check if the last element matches the current hour slot
+                        const lastIdx = updatedHistory.length - 1;
+                        if (updatedHistory[lastIdx].hour === currentHourStr) {
+                            // Update current hour's live value
+                            updatedHistory[lastIdx] = {
+                                ...updatedHistory[lastIdx],
+                                actual: update.current,
+                                baseline: update.baseline ?? updatedHistory[lastIdx].baseline
+                            };
+                        } else {
+                            // It's a new hour! Push it forward and drop oldest to keep 24 entries
+                            updatedHistory.push({
+                                hour: currentHourStr,
+                                actual: update.current,
+                                baseline: update.baseline ?? prev.baseline
+                            });
+                            if (updatedHistory.length > 24) {
+                                updatedHistory.shift();
+                            }
+                        }
+                    }
+
+                    return {
+                        ...prev,
+                        current: update.current,
+                        baseline: update.baseline,
+                        water: update.water,
+                        gas: update.gas,
+                        kpis: update.kpis,
+                        history: updatedHistory, // <-- Dynamic chart values injected here
+                        _updatedAt: new Date().toISOString()
+                    };
+                });
+                console.log("[EnergyView] Real-time update received & mapped to chart history.");
+            }
+        },
+        "sensor:reading": (reading) => {
+            console.log("[EnergyView] Sensor update:", reading?.assetId);
+        }
+    });
 
     if (loading) return (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -282,9 +347,9 @@ export default function EnergyView({ userRole }) {
     const { p: co2P, over: co2Over } = co2Vs(kpis.co2, 60);
 
     const resources = [
-        { label: t("electricity"), actual: current,       base: baseline,       unit: "kWh",   icon: "⚡", p: elecP  },
-        { label: t("water"),       actual: water.current, base: water.baseline, unit: "L/min", icon: "💧", p: waterP },
-        { label: t("gas"),         actual: gas.current,   base: gas.baseline,   unit: "m³/h",  icon: "🔥", p: gasP   },
+        { label: t("electricity"), actual: current,       base: baseline,       unit: "kWh",   icon: "", p: elecP  },
+        { label: t("water"),       actual: water.current, base: water.baseline, unit: "L/min", icon: "", p: waterP },
+        { label: t("gas"),         actual: gas.current,   base: gas.baseline,   unit: "m³/h",  icon: "", p: gasP   },
     ];
 
     const exportData = history.map(h => ({ Hour: h.hour, "Actual (kWh)": h.actual, "Baseline (kWh)": h.baseline }));
@@ -309,6 +374,7 @@ export default function EnergyView({ userRole }) {
                 body: JSON.stringify({ assetId: fd.get("assetId"), metric: fd.get("metric"), value: parseFloat(fd.get("value")) }),
             });
             setThresholdMsg(res.ok ? t("thresholdSaved") : t("thresholdError"));
+            setTimeout(() => setThresholdMsg(""), 3000);
         } catch { setThresholdMsg("Cannot connect to server."); }
     }
 
@@ -317,10 +383,19 @@ export default function EnergyView({ userRole }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
                 <div>
                     <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a2332", margin: 0 }}>{t("energyView")}</h2>
-                    <p style={{ fontSize: 11, color: "#9aa5b4", margin: "3px 0 0" }}>Live data · auto-refreshes every 15s</p>
+                    <p style={{ fontSize: 11, color: "#9aa5b4", margin: "3px 0 0" }}>
+                        Live data · Updates every 5-7s
+                        {lastUpdate && <span> · Last update: {lastUpdate.toLocaleTimeString()}</span>}
+                    </p>
                 </div>
-                <ExportBar data={fullExportData} tableRef={fullTableRef} filename="energy_full_report" />
-                {/* Hidden full table for PDF */}
+                <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={refresh} style={{
+                        fontSize: 12, padding: "6px 14px",
+                        background: "#f8faff", border: "1px solid #d1d9e6",
+                        borderRadius: 6, cursor: "pointer", fontFamily: "inherit"
+                    }}>⟳ Refresh</button>
+                    <ExportBar data={fullExportData} tableRef={fullTableRef} filename="energy_full_report" showReport={true} />
+                </div>
                 <table ref={fullTableRef} style={{ display: "none" }}>
                     <thead><tr><th>Section</th><th>Metric</th><th>Value</th><th>Target/Baseline</th><th>Status</th></tr></thead>
                     <tbody>{fullExportData.map((r, i) => <tr key={i}><td>{r.Section}</td><td>{r.Metric}</td><td>{r.Value}</td><td>{r.Target}</td><td>{r.Status}</td></tr>)}</tbody>
@@ -360,13 +435,11 @@ export default function EnergyView({ userRole }) {
                         <Area type="monotone" dataKey="actual"   name="Actual"   stroke="#1d6fcc" fill="url(#gA)" strokeWidth={2} />
                     </AreaChart>
                 </ResponsiveContainer>
-
                 <table ref={histTableRef} style={{ display: "none" }}>
                     <thead><tr><th>Hour</th><th>Actual (kWh)</th><th>Baseline (kWh)</th></tr></thead>
                     <tbody>{history.map((h, i) => <tr key={i}><td>{h.hour}</td><td>{h.actual}</td><td>{h.baseline}</td></tr>)}</tbody>
                 </table>
             </div>
-
 
             {userRole === "energy_manager" && (
                 <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 22, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" }}>

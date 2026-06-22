@@ -8,25 +8,39 @@ import EnergyView     from "./components/EnergyView";
 import AlertsPanel    from "./components/AlertsPanel";
 import UserManagement from "./components/UserManagement";
 import Chatbot        from "./components/Chatbot";
+import AuditLogView    from "./components/AuditLogView";
+import WorkOrdersView  from "./components/WorkOrdersView";
+import MqttMonitorView  from "./components/MqttMonitorView";
+import CustomTeamChat from "./components/CustomTeamChat";
+
 import { LanguageProvider, useLanguage } from "./context/LanguageContext";
+import { SocketProvider } from "./context/SocketContext";
 
 const ROLE_NAV = {
     maintenance_engineer: [
-        { id: "kpis",   icon: "" },
-        { id: "health", icon: "" },
-        { id: "alerts", icon: "" },
+        { id: "kpis" },
+        { id: "health" },
+        { id: "workorders" },
+        { id: "alerts" },
+        { id: "mqtt" },
+        { id: "teamchat" },
     ],
     energy_manager: [
-        { id: "kpis",   icon: "" },
-        { id: "energy", icon: "" },
-        { id: "alerts", icon: "" },
+        { id: "kpis" },
+        { id: "energy" },
+        { id: "alerts" },
+        { id: "teamchat" },
     ],
     it_admin: [
-        { id: "kpis",   icon: "" },
-        { id: "health", icon: "" },
-        { id: "energy", icon: "" },
-        { id: "alerts", icon: "" },
-        { id: "user",   icon: "" },
+        { id: "kpis" },
+        { id: "health" },
+        { id: "energy" },
+        { id: "workorders" },
+        { id: "alerts" },
+        { id: "user" },
+        { id: "audit" },
+        { id: "mqtt" },
+        { id: "teamchat" },
     ],
 };
 
@@ -49,8 +63,15 @@ function Clock() {
 function Dashboard() {
     const navigate = useNavigate();
     const { t, language, setLanguage } = useLanguage();
-    const [user]     = useState(() => { try { return JSON.parse(localStorage.getItem("user")); } catch { return null; } });
-    const [tab,      setTab]      = useState("kpis");
+    const [user] = useState(() => { 
+        try { 
+            const userData = localStorage.getItem("user");
+            return userData ? JSON.parse(userData) : null;
+        } catch { 
+            return null; 
+        } 
+    });
+    const [tab, setTab] = useState("kpis");
     const [sideOpen, setSideOpen] = useState(true);
 
     if (!user) return <Navigate to="/login" replace />;
@@ -58,20 +79,27 @@ function Dashboard() {
     const navItems = ROLE_NAV[user.role] || [];
 
     const navLabels = {
-        kpis:   t("kpiOverview"),
-        health: t("healthView"),
-        energy: t("energyView"),
-        alerts: t("alerts"),
-        user:   t("userManagement"),
+        kpis:       t("kpiOverview"),
+        health:     t("healthView"),
+        energy:     t("energyView"),
+        alerts:     t("alerts"),
+        workorders: "Work Orders",
+        user:       t("userManagement"),
+        audit:      "Audit Log",
+        mqtt:       "MQTT Monitor",
+        teamchat:   "Team Chat",
     };
 
-    
     const navDescs = {
-        kpis:   "Summary of all asset and energy KPIs.",
-        health: "Asset health scores, RUL, MTBF, and live sensor readings.",
-        energy: "Energy consumption vs baseline, PUE, EER, and CO₂.",
-        alerts: "Active predictive alerts and acknowledged notifications.",
-        user:   "Manage user accounts and permissions.",
+        kpis:       "Summary of all asset and energy KPIs.",
+        health:     "Asset health scores, RUL, MTBF, and live sensor readings.",
+        energy:     "Energy consumption vs baseline, PUE, EER, and CO₂.",
+        alerts:     "Active predictive alerts and acknowledged notifications.",
+        workorders: "View, filter and track all maintenance work orders.",
+        user:       "Manage user accounts and permissions.",
+        audit:      "Full history of user actions and system events.",
+        mqtt:       "Monitor MQTT messages and connections.",
+        teamchat:   "Communicate with your team in real-time.",
     };
 
     const roleLabels = {
@@ -95,20 +123,19 @@ function Dashboard() {
     const SIDE_W = sideOpen ? 220 : 60;
     const rc = roleColors[user.role] || { bg: "#f3f4f6", color: "#374151" };
 
+    const currentUser = {
+        id: user.id || user._id || 'user-' + Date.now(),
+        name: user.name,
+        email: user.email,
+        role: user.role
+    };
+
     return (
         <div style={{ display: "flex", minHeight: "100vh", background: "#f0f4f8", fontFamily: "'Inter', Arial, sans-serif" }}>
             <style>{`@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }`}</style>
 
             <aside style={{ width: SIDE_W, flexShrink: 0, background: "#fff", borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", transition: "width 0.22s ease", position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
                 <div style={{ padding: "18px 14px", borderBottom: "1px solid #f0f4f8", display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: "#1d6fcc", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                            <rect x="1" y="1" width="7" height="7" rx="1.5" fill="white" opacity="0.9"/>
-                            <rect x="10" y="1" width="7" height="7" rx="1.5" fill="white" opacity="0.55"/>
-                            <rect x="1" y="10" width="7" height="7" rx="1.5" fill="white" opacity="0.55"/>
-                            <rect x="10" y="10" width="7" height="7" rx="1.5" fill="white" opacity="0.9"/>
-                        </svg>
-                    </div>
                     {sideOpen && (
                         <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2332", letterSpacing: -0.2 }}>Smart</div>
@@ -122,8 +149,25 @@ function Dashboard() {
                         const isActive = tab === item.id;
                         return (
                             <button key={item.id} onClick={() => setTab(item.id)} title={!sideOpen ? navLabels[item.id] : ""}
-                                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: sideOpen ? "10px 12px" : "10px 14px", marginBottom: 4, borderRadius: 8, border: "none", cursor: "pointer", background: isActive ? "#eff6ff" : "transparent", color: isActive ? "#1d6fcc" : "#6b7a99", fontWeight: isActive ? 600 : 400, fontSize: 13, fontFamily: "inherit", textAlign: "left", justifyContent: sideOpen ? "flex-start" : "center", transition: "all 0.15s" }}>
-                                <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+                                style={{ 
+                                    width: "100%", 
+                                    display: "flex", 
+                                    alignItems: "center", 
+                                    gap: 10, 
+                                    padding: sideOpen ? "10px 12px" : "10px 14px", 
+                                    marginBottom: 4, 
+                                    borderRadius: 8, 
+                                    border: "none", 
+                                    cursor: "pointer", 
+                                    background: isActive ? "#eff6ff" : "transparent", 
+                                    color: isActive ? "#1d6fcc" : "#6b7a99", 
+                                    fontWeight: isActive ? 600 : 400, 
+                                    fontSize: 13, 
+                                    fontFamily: "inherit", 
+                                    textAlign: "left", 
+                                    justifyContent: sideOpen ? "flex-start" : "center", 
+                                    transition: "all 0.15s" 
+                                }}>
                                 {sideOpen && <span style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{navLabels[item.id]}</span>}
                                 {isActive && sideOpen && <span style={{ marginLeft: "auto", width: 4, height: 4, borderRadius: "50%", background: "#1d6fcc", flexShrink: 0 }} />}
                             </button>
@@ -133,8 +177,21 @@ function Dashboard() {
 
                 <div style={{ padding: "12px 8px", borderTop: "1px solid #f0f4f8" }}>
                     <button onClick={() => setSideOpen(v => !v)}
-                        style={{ width: "100%", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 8, background: "#f8faff", cursor: "pointer", fontSize: 12, color: "#6b7a99", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                        <span style={{ fontSize: 14, transform: sideOpen ? "rotate(180deg)" : "rotate(0deg)", display: "inline-block", transition: "transform 0.2s" }}>❮</span>
+                        style={{ 
+                            width: "100%", 
+                            padding: "8px 10px", 
+                            border: "1px solid #e2e8f0", 
+                            borderRadius: 8, 
+                            background: "#f8faff", 
+                            cursor: "pointer", 
+                            fontSize: 12, 
+                            color: "#6b7a99", 
+                            fontFamily: "inherit", 
+                            display: "flex", 
+                            alignItems: "center", 
+                            justifyContent: "center", 
+                            gap: 6 
+                        }}>
                         {sideOpen && <span>{t("collapse")}</span>}
                     </button>
                 </div>
@@ -166,11 +223,15 @@ function Dashboard() {
                 </header>
 
                 <main style={{ flex: 1, padding: 28, maxWidth: 1200, width: "100%" }}>
-                    {tab === "kpis"   && <KpiCards />}
-                    {tab === "health" && <HealthView  userRole={user.role} />}
-                    {tab === "energy" && <EnergyView  userRole={user.role} />}
-                    {tab === "alerts" && <AlertsPanel userRole={user.role} />}
-                    {tab === "user"   && <UserManagement />}
+                    {tab === "kpis"       && <KpiCards />}
+                    {tab === "health"     && <HealthView  userRole={user.role} />}
+                    {tab === "energy"     && <EnergyView  userRole={user.role} />}
+                    {tab === "workorders" && <WorkOrdersView userRole={user.role} />}
+                    {tab === "alerts"     && <AlertsPanel userRole={user.role} />}
+                    {tab === "user"       && <UserManagement />}
+                    {tab === "audit"      && <AuditLogView />}                                                   
+                    {tab === "mqtt"       && <MqttMonitorView userRole={user.role} />}
+                    {tab === "teamchat"   && <CustomTeamChat userRole={user.role} currentUser={currentUser} />}
                 </main>
             </div>
             <Chatbot />
@@ -186,13 +247,16 @@ function LoginPage() {
 export default function App() {
     return (
         <LanguageProvider>
-            <BrowserRouter>
-                <Routes>
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </BrowserRouter>
+            <SocketProvider>
+                <BrowserRouter>
+                    <Routes>
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="/mqtt-monitor" element={<MqttMonitorView />} />
+                    </Routes>
+                </BrowserRouter>
+            </SocketProvider>
         </LanguageProvider>
     );
 }

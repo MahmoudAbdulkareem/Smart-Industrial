@@ -224,7 +224,7 @@ export default function Login({ onLogin }) {
                         </form>
 
                         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f7ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 12px", marginBottom: 16 }}>
-                            <span style={{ fontSize: 18 }}>🔐</span>
+                            <span style={{ fontSize: 18 }}></span>
                             <span style={{ fontSize: 12, color: "#1d4ed8" }}>Two-factor authentication via <strong>Google Authenticator</strong></span>
                         </div>
 
@@ -260,7 +260,6 @@ export default function Login({ onLogin }) {
                         </div>
 
                         <div style={{ textAlign: "center", marginBottom: 20 }}>
-                            <div style={{ fontSize: 40, marginBottom: 10 }}>📱</div>
                             <h2 style={{ fontSize: 17, fontWeight: 700, color: "#1a2332", margin: "0 0 6px" }}>Set up 2-Factor Authentication</h2>
                             <p style={{ fontSize: 13, color: "#6b7a99", margin: 0 }}>This is a one-time setup. You need the <strong>Google Authenticator</strong> app on your phone.</p>
                         </div>
@@ -324,7 +323,7 @@ export default function Login({ onLogin }) {
                         </div>
 
                         <div style={{ textAlign: "center", marginBottom: 24 }}>
-                            <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+                            <div style={{ fontSize: 40, marginBottom: 10 }}></div>
                             <h2 style={{ fontSize: 17, fontWeight: 700, color: "#1a2332", margin: "0 0 8px" }}>Confirm your authenticator</h2>
                             <p style={{ fontSize: 13, color: "#6b7a99", margin: 0 }}>
                                 Open <strong>Google Authenticator</strong> on your phone.<br />
@@ -339,7 +338,7 @@ export default function Login({ onLogin }) {
                             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 13px", fontSize: 13, color: "#dc2626", marginBottom: 14, textAlign: "center" }}>⚠ {error}</div>}
                             <button type="submit" disabled={verifying || confirmCode.length !== 6}
                                 style={{ width: "100%", padding: 11, fontSize: 14, fontWeight: 600, background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", marginBottom: 8, opacity: (verifying || confirmCode.length !== 6) ? 0.65 : 1 }}>
-                                {verifying ? "Verifying…" : "Activate & Sign In 🎉"}
+                                {verifying ? "Verifying…" : "Activate "}
                             </button>
                         </form>
                         <button onClick={() => { setStep("totp-setup"); setError(""); setConfirmCode(""); }}
@@ -352,9 +351,7 @@ export default function Login({ onLogin }) {
                 {step === "totp" && (
                     <div>
                         <div style={{ textAlign: "center", marginBottom: 24 }}>
-                            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg,#f0f7ff,#dbeafe)", border: "2px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", fontSize: 28 }}>
-                                🔐
-                            </div>
+                           
                             <h2 style={{ fontSize: 17, fontWeight: 700, color: "#1a2332", margin: "0 0 8px" }}>Two-Factor Authentication</h2>
                             <p style={{ fontSize: 13, color: "#6b7a99", margin: 0 }}>
                                 Open <strong>Google Authenticator</strong> on your phone<br />
@@ -363,7 +360,6 @@ export default function Login({ onLogin }) {
                         </div>
 
                         <div style={{ background: "#f8faff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "12px 16px", marginBottom: 22, display: "flex", alignItems: "center", gap: 12 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#4285f4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🔑</div>
                             <div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2332" }}>Google Authenticator</div>
                                 <div style={{ fontSize: 11, color: "#9aa5b4" }}>Smart Dashboard · {email}</div>

@@ -13,20 +13,20 @@ function generateToken(user) {
 function requireAuth(req, res, next) {
     const header = req.headers["authorization"];
     if (!header || !header.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "No token provided" });
+        return res.status(401).json({ error: "No Token Provided" });
     }
     try {
         req.user = jwt.verify(header.split(" ")[1], JWT_SECRET);
         next();
     } catch {
-        return res.status(401).json({ error: "Invalid or expired token" });
+        return res.status(401).json({ error: "Invalid or Expired Token" });
     }
 }
 
 function requireRole(role) {
     return (req, res, next) => {
         if (req.user.role !== role) {
-            return res.status(403).json({ error: "Access denied" });
+            return res.status(403).json({ error : "Access Denied" });
         }
         next();
     };

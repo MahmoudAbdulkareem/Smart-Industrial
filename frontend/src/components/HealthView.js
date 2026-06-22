@@ -1,5 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useApi } from "../hooks/useApi";
+import { useSocket } from "../hooks/useSocket";
 import { useLanguage } from "../context/LanguageContext";
 
 function exportCSV(data, filename) {
@@ -7,47 +8,43 @@ function exportCSV(data, filename) {
     const keys = Object.keys(data[0]);
     const csv = [keys.join(","), ...data.map(r => keys.map(k => JSON.stringify(r[k] ?? "")).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a"); a.href = url; a.download = filename + ".csv"; a.click();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename + ".csv";
+    a.click();
     URL.revokeObjectURL(url);
 }
+
 function exportExcel(data, filename) {
     if (!data || !data.length) return;
     const keys = Object.keys(data[0]);
     const rows = [keys, ...data.map(r => keys.map(k => r[k] ?? ""))];
-    const xml  = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Sheet1"><Table>${
-        rows.map(r => `<Row>${r.map(c => `<Cell><Data ss:Type="${typeof c === "number" ? "Number" : "String"}">${String(c).replace(/&/g,"&amp;").replace(/</g,"&lt;")}</Data></Cell>`).join("")}</Row>`).join("")
+    const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Sheet1"><Table>${
+        rows.map(r => `<Row>${r.map(c => `<Cell><Data ss:Type="${typeof c === "number" ? "Number" : "String"}">${String(c).replace(/&/g, "&amp;").replace(/</g, "&lt;")}</Data></Cell>`).join("")}</Row>`).join("")
     }</Table></Worksheet></Workbook>`;
     const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a"); a.href = url; a.download = filename + ".xls"; a.click();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename + ".xls";
+    a.click();
     URL.revokeObjectURL(url);
 }
-function exportPDF(tableRef, filename) {
-    const printWin = window.open("", "_blank");
-    const html = `<!DOCTYPE html><html><head><title>${filename}</title>
-    <style>body{font-family:Inter,Arial,sans-serif;padding:24px;color:#1a2332}h2{font-size:18px;margin-bottom:16px}
-    table{width:100%;border-collapse:collapse;font-size:12px}th{background:#1d6fcc;color:#fff;padding:9px 12px;text-align:left}
-    td{padding:8px 12px;border-bottom:1px solid #e2e8f0}tr:nth-child(even){background:#f8faff}
-    .healthy{color:#15803d;font-weight:600}.caution{color:#b45309;font-weight:600}.critical{color:#b91c1c;font-weight:600}
-    @media print{body{padding:0}}</style></head><body>
-    <h2>${filename}</h2>${tableRef.current?.outerHTML || ""}<script>window.onload=()=>{window.print();window.close()}</script>
-    </body></html>`;
-    printWin.document.write(html); printWin.document.close();
-}
-function ExportBar({ data, tableRef, filename }) {
+
+function ExportBar({ data, filename }) {
     return (
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <span style={{ fontSize: 11, color: "#9aa5b4", fontWeight: 500 }}>Export:</span>
             {[
                 { label: "Excel", color: "#166534", bg: "#f0fdf4", action: () => exportExcel(data, filename) },
-                { label: "CSV",   color: "#1d4ed8", bg: "#eff6ff", action: () => exportCSV(data, filename) },
+                { label: "CSV", color: "#1d4ed8", bg: "#eff6ff", action: () => exportCSV(data, filename) },
             ].map(b => (
                 <button key={b.label} onClick={b.action}
                     style={{ padding: "4px 11px", fontSize: 11, fontWeight: 600, borderRadius: 6,
                         border: "1px solid " + b.color + "40", background: b.bg, color: b.color,
                         cursor: "pointer", fontFamily: "inherit" }}>
-                    ↓ {b.label}
+                    ↓ Report ({b.label})
                 </button>
             ))}
         </div>
@@ -55,8 +52,8 @@ function ExportBar({ data, tableRef, filename }) {
 }
 
 const STATUS_STYLES = {
-    healthy:  { bg: "#f0fdf4", border: "#86efac", text: "#15803d", bar: "#22c55e", dot: "#16a34a", badge: "#dcfce7" },
-    caution:  { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", bar: "#f59e0b", dot: "#d97706", badge: "#fef9c3" },
+    healthy: { bg: "#f0fdf4", border: "#86efac", text: "#15803d", bar: "#22c55e", dot: "#16a34a", badge: "#dcfce7" },
+    caution: { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", bar: "#f59e0b", dot: "#d97706", badge: "#fef9c3" },
     critical: { bg: "#fff1f2", border: "#fca5a5", text: "#b91c1c", bar: "#ef4444", dot: "#dc2626", badge: "#fee2e2" },
 };
 
@@ -70,7 +67,7 @@ function normaliseStatus(raw) {
 
 function WorkOrderModal({ asset, onClose }) {
     const { t } = useLanguage();
-    const [desc,   setDesc]   = useState(`${t("createWorkOrder")} — Health: ${asset.healthScore}/100`);
+    const [desc, setDesc] = useState(`${t("createWorkOrder")} — Health: ${asset.healthScore}/100`);
     const [status, setStatus] = useState("idle");
     const [result, setResult] = useState(null);
 
@@ -84,7 +81,8 @@ function WorkOrderModal({ asset, onClose }) {
             });
             const json = await res.json();
             if (!res.ok) { setStatus("error"); return; }
-            setResult(json); setStatus("success");
+            setResult(json);
+            setStatus("success");
         } catch { setStatus("error"); }
     }
 
@@ -131,15 +129,13 @@ function AssetCard({ asset, canCreateWO }) {
     const { t } = useLanguage();
     const [showModal, setShowModal] = useState(false);
     const key = normaliseStatus(asset.status);
-    const s   = STATUS_STYLES[key];
+    const s = STATUS_STYLES[key];
 
     const statusLabel = {
-        healthy:  t("healthy"),
-        caution:  t("caution"),
+        healthy: t("healthy"),
+        caution: t("caution"),
         critical: t("critical"),
     };
-
-    const statusIcon = { healthy: "✅", caution: "⚠️", critical: "🔴" };
 
     return (
         <div style={{
@@ -154,7 +150,6 @@ function AssetCard({ asset, canCreateWO }) {
             boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
             transition: "box-shadow 0.2s",
         }}>
-            {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: "#1a2332" }}>{asset.name}</div>
@@ -173,7 +168,7 @@ function AssetCard({ asset, canCreateWO }) {
                     gap: 5,
                     whiteSpace: "nowrap",
                 }}>
-                    {statusIcon[key]} {statusLabel[key]}
+                    {statusLabel[key]}
                 </span>
             </div>
 
@@ -195,8 +190,8 @@ function AssetCard({ asset, canCreateWO }) {
 
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                 {[
-                    { label: t("rul"),  value: asset.rul  + " days" },
-                    { label: t("mtbf"), value: asset.mtbf + " hrs"  },
+                    { label: t("rul"), value: asset.rul + " days" },
+                    { label: t("mtbf"), value: asset.mtbf + " hrs" },
                 ].map(k => (
                     <div key={k.label}>
                         <div style={{ fontSize: 10, color: "#9aa5b4", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>{k.label}</div>
@@ -212,12 +207,11 @@ function AssetCard({ asset, canCreateWO }) {
 
             <div style={{ background: "#f8faff", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 18, flexWrap: "wrap", border: "1px solid #e8f0fe" }}>
                 {[
-                    { label: "Vibration", value: (asset.sensors?.vibration   ?? "—") + " mm/s", icon: "📳" },
-                    { label: "Temp",      value: (asset.sensors?.temperature ?? "—") + " °C",   icon: "🌡" },
-                    { label: "Pressure",  value: (asset.sensors?.pressure    ?? "—") + " bar",  icon: "💨" },
+                    { label: "Vibration", value: (asset.sensors?.vibration ?? "—") + " mm/s" },
+                    { label: "Temp", value: (asset.sensors?.temperature ?? "—") + " °C" },
+                    { label: "Pressure", value: (asset.sensors?.pressure ?? "—") + " bar" },
                 ].map(r => (
                     <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 14 }}>{r.icon}</span>
                         <div>
                             <div style={{ fontSize: 9, color: "#9aa5b4", textTransform: "uppercase", letterSpacing: 0.5 }}>{r.label}</div>
                             <div style={{ fontSize: 12, color: "#374151", fontWeight: 600, marginTop: 1 }}>{r.value}</div>
@@ -245,7 +239,6 @@ function AssetCard({ asset, canCreateWO }) {
 
 function SummaryBadge({ statusKey, count, label }) {
     const s = STATUS_STYLES[statusKey];
-    const icons = { critical: "🔴", caution: "🟡", healthy: "🟢" };
     return (
         <div style={{
             background: s.bg,
@@ -257,7 +250,6 @@ function SummaryBadge({ statusKey, count, label }) {
             gap: 10,
             minWidth: 120,
         }}>
-            <span style={{ fontSize: 22 }}>{icons[statusKey]}</span>
             <div>
                 <div style={{ fontSize: 26, fontWeight: 800, color: s.text, lineHeight: 1 }}>{count}</div>
                 <div style={{ fontSize: 12, color: s.text, fontWeight: 600, marginTop: 2 }}>{label}</div>
@@ -266,10 +258,62 @@ function SummaryBadge({ statusKey, count, label }) {
     );
 }
 
+function removeDuplicates(assets) {
+    const uniqueMap = new Map();
+    assets.forEach(asset => {
+        const existing = uniqueMap.get(asset.id);
+        if (!existing || asset.healthScore > existing.healthScore) {
+            uniqueMap.set(asset.id, asset);
+        }
+    });
+    return Array.from(uniqueMap.values());
+}
+
 export default function HealthView({ userRole }) {
     const { t } = useLanguage();
-    const { data, loading, error, refresh } = useApi("/assets/health", 15000);
+    const { data, loading, error, refresh, setData } = useApi("/assets/health", 15000);
+    const [uniqueData, setUniqueData] = useState([]);
+    const [lastUpdate, setLastUpdate] = useState(null);
     const tableRef = useRef(null);
+
+    useEffect(() => {
+        if (Array.isArray(data) && data.length > 0) {
+            const unique = removeDuplicates(data);
+            setUniqueData(unique);
+        } else {
+            setUniqueData([]);
+        }
+    }, [data]);
+
+    useSocket({
+        "sensor:reading": (reading) => {
+            if (!reading?.assetId) return;
+            setLastUpdate(new Date());
+            setData(prev => {
+                if (!Array.isArray(prev)) return prev;
+                const updated = prev.map(asset =>
+                    asset.id === reading.assetId
+                        ? {
+                            ...asset,
+                            healthScore: reading.healthScore ?? asset.healthScore,
+                            rul: reading.rul ?? asset.rul,
+                            status: reading.status ?? asset.status,
+                            sensors: {
+                                ...asset.sensors,
+                                vibration: reading.sensors?.vibration ?? asset.sensors?.vibration,
+                                temperature: reading.sensors?.temperature ?? asset.sensors?.temperature,
+                                pressure: reading.sensors?.pressure ?? asset.sensors?.pressure,
+                            }
+                        }
+                        : asset
+                );
+                return updated;
+            });
+        },
+        "alert:triggered": (alert) => {
+            console.log("Alert received:", alert);
+        }
+    });
 
     if (loading) {
         return (
@@ -280,43 +324,63 @@ export default function HealthView({ userRole }) {
             </div>
         );
     }
+
     if (error) return (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "14px 18px", color: "#b91c1c", fontSize: 13 }}>
             ❌ Error loading health data: {error}
-        </div>
-    );
-    if (!Array.isArray(data) || data.length === 0) return (
-        <div style={{ background: "#f8faff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "20px", color: "#6b7a99", fontSize: 13, textAlign: "center" }}>
-            No asset data available yet. Make sure the backend and mock publisher are running.
+            <button onClick={refresh} style={{ marginLeft: 10, color: "#1d6fcc", background: "none", border: "none", cursor: "pointer" }}>Retry</button>
         </div>
     );
 
-    const normalised = data.map(a => ({ ...a, status: normaliseStatus(a.status) }));
-    const sorted     = [...normalised].sort((a, b) => a.healthScore - b.healthScore);
-    const canCreate  = userRole === "maintenance_engineer";
+    if (!Array.isArray(uniqueData) || uniqueData.length === 0) return (
+        <div style={{ background: "#f8faff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "20px", color: "#6b7a99", fontSize: 13, textAlign: "center" }}>
+            No asset data available yet. Make sure the backend is running.
+        </div>
+    );
+
+    const normalised = uniqueData.map(a => ({ ...a, status: normaliseStatus(a.status) }));
+    const sorted = [...normalised].sort((a, b) => a.healthScore - b.healthScore);
+    const canCreate = userRole === "maintenance_engineer";
 
     const counts = {
         critical: normalised.filter(a => a.status === "critical").length,
-        caution:  normalised.filter(a => a.status === "caution").length,
-        healthy:  normalised.filter(a => a.status === "healthy").length,
+        caution: normalised.filter(a => a.status === "caution").length,
+        healthy: normalised.filter(a => a.status === "healthy").length,
     };
 
     const avgScore = normalised.length
         ? parseFloat((normalised.reduce((s, a) => s + a.healthScore, 0) / normalised.length).toFixed(1))
         : 0;
 
+    const exportData = sorted.map(a => ({
+        ID: a.id,
+        Name: a.name,
+        Location: a.location,
+        Status: a.status,
+        "Health Score": a.healthScore,
+        "RUL (days)": a.rul,
+        "MTBF (hrs)": a.mtbf,
+        "Vibration (mm/s)": a.sensors?.vibration ?? "",
+        "Temp (°C)": a.sensors?.temperature ?? "",
+        "Pressure (bar)": a.sensors?.pressure ?? "",
+    }));
+
     return (
         <div>
-        
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <SummaryBadge statusKey="critical" count={counts.critical} label={t("critical")} />
-                    <SummaryBadge statusKey="caution"  count={counts.caution}  label={t("caution")}  />
-                    <SummaryBadge statusKey="healthy"  count={counts.healthy}  label={t("healthy")}  />
-                    <div style={{ background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 10, padding: "12px 20px", minWidth: 120 }}>
-                        <div style={{ fontSize: 26, fontWeight: 800, color: "#3730a3", lineHeight: 1 }}>{avgScore}</div>
-                        <div style={{ fontSize: 12, color: "#4f46e5", fontWeight: 600, marginTop: 2 }}>Avg Score</div>
+                <div>
+                    <p style={{ fontSize: 11, color: "#9aa5b4", margin: "0 0 5px 0" }}>
+                        Live sensor data · Updates every 5-7s
+                        {lastUpdate && <span> · Last: {lastUpdate.toLocaleTimeString()}</span>}
+                    </p>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        <SummaryBadge statusKey="critical" count={counts.critical} label={t("critical")} />
+                        <SummaryBadge statusKey="caution" count={counts.caution} label={t("caution")} />
+                        <SummaryBadge statusKey="healthy" count={counts.healthy} label={t("healthy")} />
+                        <div style={{ background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 10, padding: "12px 20px", minWidth: 120 }}>
+                            <div style={{ fontSize: 26, fontWeight: 800, color: "#3730a3", lineHeight: 1 }}>{avgScore}</div>
+                            <div style={{ fontSize: 12, color: "#4f46e5", fontWeight: 600, marginTop: 2 }}>Avg Score</div>
+                        </div>
                     </div>
                 </div>
 
@@ -329,37 +393,9 @@ export default function HealthView({ userRole }) {
                     }}>
                         ⟳ {t("refresh")}
                     </button>
-                    <ExportBar
-                        data={sorted.map(a => ({
-                            ID: a.id, Name: a.name, Location: a.location,
-                            Status: a.status, "Health Score": a.healthScore,
-                            "RUL (days)": a.rul, "MTBF (hrs)": a.mtbf,
-                            "Vibration (mm/s)": a.sensors?.vibration ?? "",
-                            "Temp (°C)": a.sensors?.temperature ?? "",
-                            "Pressure (bar)": a.sensors?.pressure ?? "",
-                        }))}
-                        tableRef={tableRef}
-                        filename="asset_health_report"
-                    />
+                    <ExportBar data={exportData} filename="asset_health_report" />
                 </div>
             </div>
-
-            <table ref={tableRef} style={{ display: "none" }}>
-                <thead>
-                    <tr><th>ID</th><th>Name</th><th>Location</th><th>Status</th><th>Health Score</th><th>RUL (days)</th><th>MTBF (hrs)</th><th>Vibration</th><th>Temp °C</th><th>Pressure bar</th></tr>
-                </thead>
-                <tbody>
-                    {sorted.map(a => (
-                        <tr key={a.id} className={a.status}>
-                            <td>{a.id}</td><td>{a.name}</td><td>{a.location}</td><td>{a.status}</td>
-                            <td>{a.healthScore}</td><td>{a.rul}</td><td>{a.mtbf}</td>
-                            <td>{a.sensors?.vibration ?? ""}</td>
-                            <td>{a.sensors?.temperature ?? ""}</td>
-                            <td>{a.sensors?.pressure ?? ""}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
                 {sorted.map(asset => (

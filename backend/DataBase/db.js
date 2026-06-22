@@ -2,7 +2,7 @@ const sql = require("mssql");
 
 const config = {
     server:   process.env.DB_SERVER   || "localhost",
-    port:     parseInt(process.env.DB_PORT || "63990"),
+    port:     parseInt(process.env.DB_PORT || "1433"),
     database: process.env.DB_DATABASE || "SmartDashboard",
     user:     process.env.DB_USER     || "dashboarduser",
     password: process.env.DB_PASSWORD || "Dashboard@2026",
@@ -39,4 +39,4 @@ async function queryOne(text, params = {}) {
     return rows[0] || null;
 }
 
-module.exports = { query, queryOne, sql };
+module.exports = { getPool, query, queryOne };
