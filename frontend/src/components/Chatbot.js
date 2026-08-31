@@ -271,31 +271,7 @@ export default function Chatbot() {
 
     return (
         <>
-            <button
-                onClick={() => setOpen(o => !o)}
-                title="Smart Dashboard Assistant"
-                style={{
-                    position: "fixed", bottom: 28, right: 28, zIndex: 1000,
-                    width: 56, height: 56, borderRadius: "50%",
-                    background: open ? "#374151" : "linear-gradient(135deg,#1d6fcc,#2563eb)",
-                    border: "none", cursor: "pointer",
-                    boxShadow: open ? "0 4px 16px rgba(55,65,81,0.4)" : "0 6px 24px rgba(29,111,204,0.45)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 24, transition: "all 0.22s",
-                }}
-            >
-                {open ? "✕" : "💬"}
-                {!open && unread > 0 && (
-                    <span style={{
-                        position: "absolute", top: -4, right: -4,
-                        background: "#ef4444", color: "#fff",
-                        fontSize: 10, fontWeight: 700,
-                        width: 18, height: 18, borderRadius: "50%",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        border: "2px solid #fff",
-                    }}>{unread}</span>
-                )}
-            </button>
+           
 
             {open && (
                 <div style={{

@@ -1,5 +1,11 @@
+// App.js
 import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import {
+    LayoutDashboard, HeartPulse, Zap, ClipboardList, AlertTriangle, Users, ScrollText,
+    Radio, MessageSquare, Brain, CalendarClock, FlaskConical, Boxes,
+    ChevronLeft, ChevronRight, ChevronDown, LogOut, Globe, Wifi, WifiOff, Gauge, Siren,
+} from "lucide-react";
 import Login          from "./components/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 import KpiCards       from "./components/KpiCards";
@@ -7,42 +13,39 @@ import HealthView     from "./components/HealthView";
 import EnergyView     from "./components/EnergyView";
 import AlertsPanel    from "./components/AlertsPanel";
 import UserManagement from "./components/UserManagement";
-import Chatbot        from "./components/Chatbot";
-import AuditLogView    from "./components/AuditLogView";
-import WorkOrdersView  from "./components/WorkOrdersView";
-import MqttMonitorView  from "./components/MqttMonitorView";
-import CustomTeamChat from "./components/CustomTeamChat";
-
+import AuditLogView   from "./components/AuditLogView";
+import WorkOrdersView from "./components/WorkOrdersView";
+import MqttMonitorView from "./components/MqttMonitorView";
+import MLDashboardView from "./components/MLDashboardView";
+import ChatWidget from "./components/ChatWidget";
+import PredictiveCalendar from "./components/PredictiveCalendar";
+import AnomalyPlayground from "./components/AnomalyPlayground";
+import MaximoStatusPill from "./components/shell/MaximoStatusPill";
+import PulseRibbon from "./components/shell/PulseRibbon";
+import FailureInjectorDrawer from "./components/shell/FailureInjectorDrawer";
+import { useFleetPulse } from "./hooks/useFleetPulse";
+import { useAudibleAlarm } from "./hooks/useAudibleAlarm";
 import { LanguageProvider, useLanguage } from "./context/LanguageContext";
 import { SocketProvider } from "./context/SocketContext";
 
 const ROLE_NAV = {
-    maintenance_engineer: [
-        { id: "kpis" },
-        { id: "health" },
-        { id: "workorders" },
-        { id: "alerts" },
-        { id: "mqtt" },
-        { id: "teamchat" },
-    ],
-    energy_manager: [
-        { id: "kpis" },
-        { id: "energy" },
-        { id: "alerts" },
-        { id: "teamchat" },
-    ],
-    it_admin: [
-        { id: "kpis" },
-        { id: "health" },
-        { id: "energy" },
-        { id: "workorders" },
-        { id: "alerts" },
-        { id: "user" },
-        { id: "audit" },
-        { id: "mqtt" },
-        { id: "teamchat" },
-    ],
+    maintenance_engineer: ["kpis", "health", "workorders", "alerts", "mqtt", "ml", "calendar"],
+    energy_manager: ["kpis", "energy", "alerts", "mqtt", "ml", "calendar"],
+    it_admin: ["kpis", "health", "energy", "workorders", "alerts", "user", "audit", "mqtt", "ml", "calendar", "anomaly"],
 };
+
+const NAV_ICON = {
+    kpis: LayoutDashboard, health: HeartPulse, energy: Zap, workorders: ClipboardList,
+    alerts: AlertTriangle, user: Users, audit: ScrollText, mqtt: Radio,
+    ml: Brain, calendar: CalendarClock, anomaly: FlaskConical,
+};
+
+const NAV_GROUPS = [
+    { title: "Dashboard", itemIds: ["kpis", "health", "energy"] },
+    { title: "Maintenance", itemIds: ["workorders", "alerts", "calendar"] },
+    { title: "AI & Analytics", itemIds: ["ml", "anomaly"] },
+    { title: "Management", itemIds: ["user", "audit", "mqtt"] },
+];
 
 function Clock() {
     const [now, setNow] = useState(new Date());
@@ -53,9 +56,57 @@ function Clock() {
     const date = now.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
     const time = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     return (
-        <div style={{ textAlign: "right", lineHeight: 1.3 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2332", letterSpacing: 0.5, fontVariantNumeric: "tabular-nums" }}>{time}</div>
-            <div style={{ fontSize: 11, color: "#6b7a99" }}>{date}</div>
+        <div className="text-right leading-tight">
+            <div className="text-sm font-semibold text-ink font-mono tabular-nums">{time}</div>
+            <div className="text-[11px] text-ink-dim">{date}</div>
+        </div>
+    );
+}
+
+function StatusPill({ icon, label, tone = "info" }) {
+    const toneClasses = {
+        normal: "bg-status-normal/10 text-status-normal border-status-normal/30",
+        elevated: "bg-status-elevated/10 text-status-elevated border-status-elevated/30",
+        critical: "bg-status-critical/10 text-status-critical border-status-critical/30",
+        info: "bg-status-info/10 text-status-info border-status-info/30",
+    };
+    return (
+        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium font-mono ${toneClasses[tone]}`}>
+            {icon}{label}
+        </span>
+    );
+}
+
+function SystemStatusBar() {
+    const { isConnected, globalHealth, activeAlerts, lastMessageAt, history } = useFleetPulse();
+
+    const secondsSince = lastMessageAt ? Math.max(0, Math.round((Date.now() - lastMessageAt) / 1000)) : null;
+    const healthTone = globalHealth == null ? "info" : globalHealth >= 80 ? "normal" : globalHealth >= 50 ? "elevated" : "critical";
+    const ribbonTone = healthTone === "info" ? "normal" : healthTone;
+
+    return (
+        <div className="border-b border-surface-line bg-surface-panel">
+            <div className="flex items-center justify-between px-8 py-2 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <StatusPill
+                        icon={isConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
+                        label={isConnected ? `MQTT Broker: LIVE${secondsSince != null ? ` \u00b7 ${secondsSince}s ago` : ""}` : "MQTT Broker: OFFLINE"}
+                        tone={isConnected ? "normal" : "critical"}
+                    />
+                    <MaximoStatusPill />
+                    <StatusPill
+                        icon={<Gauge size={13} />}
+                        label={globalHealth == null ? "Fleet Health: awaiting data" : `Fleet Health: ${globalHealth.toFixed(1)}%`}
+                        tone={healthTone}
+                    />
+                    <StatusPill
+                        icon={<AlertTriangle size={13} />}
+                        label={`Active Alerts: ${activeAlerts}`}
+                        tone={activeAlerts > 0 ? "critical" : "normal"}
+                    />
+                </div>
+            </div>
+            <PulseRibbon history={history} tone={ribbonTone} />
         </div>
     );
 }
@@ -63,55 +114,54 @@ function Clock() {
 function Dashboard() {
     const navigate = useNavigate();
     const { t, language, setLanguage } = useLanguage();
-    const [user] = useState(() => { 
-        try { 
+    const [user] = useState(() => {
+        try {
             const userData = localStorage.getItem("user");
             return userData ? JSON.parse(userData) : null;
-        } catch { 
-            return null; 
-        } 
+        } catch {
+            return null;
+        }
     });
     const [tab, setTab] = useState("kpis");
     const [sideOpen, setSideOpen] = useState(true);
+    const [injectorOpen, setInjectorOpen] = useState(false);
+    const { enabled: alarmEnabled, setEnabled: setAlarmEnabled } = useAudibleAlarm();
+    const [openGroups, setOpenGroups] = useState({
+        "Dashboard": true, "Maintenance": true, "AI & Analytics": true, "Management": true,
+    });
 
     if (!user) return <Navigate to="/login" replace />;
 
     const navItems = ROLE_NAV[user.role] || [];
+    const groupedItemIds = NAV_GROUPS.flatMap((g) => g.itemIds);
+    const remainingItems = navItems.filter((id) => !groupedItemIds.includes(id));
 
     const navLabels = {
-        kpis:       t("kpiOverview"),
-        health:     t("healthView"),
-        energy:     t("energyView"),
-        alerts:     t("alerts"),
-        workorders: "Work Orders",
-        user:       t("userManagement"),
-        audit:      "Audit Log",
-        mqtt:       "MQTT Monitor",
-        teamchat:   "Team Chat",
+        kpis: t("kpiOverview"), health: t("healthView"), energy: t("energyView"), alerts: t("alerts"),
+        workorders: "Work Orders & Maximo Sync", user: t("userManagement"), audit: "Audit Log",
+        mqtt: "MQTT Monitor", ml: "ML Dashboard", calendar: "Maintenance Calendar",
+        anomaly: "Anomaly Playground",
     };
-
     const navDescs = {
-        kpis:       "Summary of all asset and energy KPIs.",
-        health:     "Asset health scores, RUL, MTBF, and live sensor readings.",
-        energy:     "Energy consumption vs baseline, PUE, EER, and CO₂.",
-        alerts:     "Active predictive alerts and acknowledged notifications.",
-        workorders: "View, filter and track all maintenance work orders.",
-        user:       "Manage user accounts and permissions.",
-        audit:      "Full history of user actions and system events.",
-        mqtt:       "Monitor MQTT messages and connections.",
-        teamchat:   "Communicate with your team in real-time.",
+        kpis: "Summary of all asset and energy KPIs.",
+        health: "Asset health scores, RUL, MTBF, and live sensor readings.",
+        energy: "Energy consumption vs baseline, PUE, EER, and CO2.",
+        alerts: "Active predictive alerts and acknowledged notifications.",
+        workorders: "Auto-generated & manual work orders with live IBM Maximo sync.",
+        user: "Manage user accounts and permissions.",
+        audit: "Full history of user actions and system events.",
+        mqtt: "Monitor MQTT messages and connections.",
+        ml: "Isolation Forest anomaly detection & RUL predictions.",
+        calendar: "AI-powered predictive maintenance scheduling calendar.",
+        anomaly: "Interactive ML model training with explainable AI.",
     };
-
     const roleLabels = {
-        maintenance_engineer: t("maintenanceEngineer"),
-        energy_manager:       t("energyManager"),
-        it_admin:             t("itAdmin"),
+        maintenance_engineer: t("maintenanceEngineer"), energy_manager: t("energyManager"), it_admin: t("itAdmin"),
     };
-
-    const roleColors = {
-        maintenance_engineer: { bg: "#dbeafe", color: "#1d4ed8" },
-        energy_manager:       { bg: "#dcfce7", color: "#166534" },
-        it_admin:             { bg: "#ede9fe", color: "#6d28d9" },
+    const roleTone = {
+        maintenance_engineer: "bg-status-info/10 text-status-info",
+        energy_manager: "bg-status-normal/10 text-status-normal",
+        it_admin: "bg-purple-500/10 text-purple-600",
     };
 
     function logout() {
@@ -120,121 +170,151 @@ function Dashboard() {
         navigate("/login", { replace: true });
     }
 
-    const SIDE_W = sideOpen ? 220 : 60;
-    const rc = roleColors[user.role] || { bg: "#f3f4f6", color: "#374151" };
+    const rc = roleTone[user.role] || "bg-surface-line text-ink-dim";
 
     const currentUser = {
-        id: user.id || user._id || 'user-' + Date.now(),
-        name: user.name,
-        email: user.email,
-        role: user.role
+        id: user.id || user._id || "user-" + Date.now(),
+        name: user.name, email: user.email, role: user.role,
     };
 
     return (
-        <div style={{ display: "flex", minHeight: "100vh", background: "#f0f4f8", fontFamily: "'Inter', Arial, sans-serif" }}>
-            <style>{`@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }`}</style>
-
-            <aside style={{ width: SIDE_W, flexShrink: 0, background: "#fff", borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", transition: "width 0.22s ease", position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
-                <div style={{ padding: "18px 14px", borderBottom: "1px solid #f0f4f8", display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="flex min-h-screen bg-surface font-sans">
+            {/* Sidebar */}
+            <aside
+                className={`flex-shrink-0 bg-base flex flex-col sticky top-0 h-screen overflow-hidden shadow-panel transition-[width] duration-200 ${sideOpen ? "w-[240px]" : "w-[64px]"}`}
+            >
+                <div className="flex items-center gap-3 px-4 py-5 border-b border-white/5">
+                    <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-status-info to-blue-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+  <img 
+    src="/smart.png" 
+    alt="Smart Industrial" 
+    className="w-full h-full object-cover" 
+  />
+</div>
                     {sideOpen && (
-                        <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2332", letterSpacing: -0.2 }}>Smart</div>
-                            <div style={{ fontSize: 10, color: "#9aa5b4" }}>Industrial Monitor</div>
+                        <div className="overflow-hidden whitespace-nowrap">
+                            <div className="text-sm font-extrabold text-ink-inverted tracking-tight">Smart Industrial</div>
+                            <div className="text-[9px] text-ink-invertedDim uppercase tracking-wider">Industrial 4.0 Platform</div>
                         </div>
                     )}
                 </div>
 
-                <nav style={{ padding: "12px 8px", flex: 1 }}>
-                    {navItems.map(item => {
-                        const isActive = tab === item.id;
+                <nav className="px-2.5 py-3 flex-1 overflow-y-auto scroll-thin">
+                    {NAV_GROUPS.map((group) => {
+                        const visibleIds = group.itemIds.filter((id) => navItems.includes(id));
+                        if (!visibleIds.length) return null;
+                        const headerActive = visibleIds.includes(tab);
+                        const open = openGroups[group.title];
                         return (
-                            <button key={item.id} onClick={() => setTab(item.id)} title={!sideOpen ? navLabels[item.id] : ""}
-                                style={{ 
-                                    width: "100%", 
-                                    display: "flex", 
-                                    alignItems: "center", 
-                                    gap: 10, 
-                                    padding: sideOpen ? "10px 12px" : "10px 14px", 
-                                    marginBottom: 4, 
-                                    borderRadius: 8, 
-                                    border: "none", 
-                                    cursor: "pointer", 
-                                    background: isActive ? "#eff6ff" : "transparent", 
-                                    color: isActive ? "#1d6fcc" : "#6b7a99", 
-                                    fontWeight: isActive ? 600 : 400, 
-                                    fontSize: 13, 
-                                    fontFamily: "inherit", 
-                                    textAlign: "left", 
-                                    justifyContent: sideOpen ? "flex-start" : "center", 
-                                    transition: "all 0.15s" 
-                                }}>
-                                {sideOpen && <span style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{navLabels[item.id]}</span>}
-                                {isActive && sideOpen && <span style={{ marginLeft: "auto", width: 4, height: 4, borderRadius: "50%", background: "#1d6fcc", flexShrink: 0 }} />}
+                            <div key={group.title} className="mb-2">
+                                <button
+                                    onClick={() => setOpenGroups((prev) => ({ ...prev, [group.title]: !prev[group.title] }))}
+                                    className={`w-full flex items-center justify-between rounded-lg mb-0.5 font-bold text-[11px] uppercase tracking-wider transition-colors ${sideOpen ? "px-3 py-2" : "px-2.5 py-2"} ${headerActive ? "bg-status-info/15 text-status-info" : "text-ink-invertedDim hover:text-ink-inverted"}`}
+                                >
+                                    {sideOpen ? group.title : group.title.charAt(0)}
+                                    <ChevronDown size={12} className={`transition-transform ${open ? "rotate-0" : "-rotate-90"}`} />
+                                </button>
+                                {open && visibleIds.map((id) => {
+                                    const Icon = NAV_ICON[id];
+                                    const isActive = tab === id;
+                                    return (
+                                        <button
+                                            key={id}
+                                            onClick={() => setTab(id)}
+                                            title={!sideOpen ? navLabels[id] : ""}
+                                            className={`w-full flex items-center gap-2.5 rounded-lg mb-0.5 text-[13px] transition-colors relative ${sideOpen ? "px-4 py-2 justify-start" : "px-2.5 py-2 justify-center"} ${isActive ? "bg-status-info/20 text-white font-semibold" : "text-ink-invertedDim hover:bg-white/5 hover:text-ink-inverted font-normal"}`}
+                                        >
+                                            <Icon size={16} className="flex-shrink-0" />
+                                            {sideOpen && <span className="overflow-hidden whitespace-nowrap">{navLabels[id]}</span>}
+                                            {isActive && sideOpen && <span className="ml-auto w-1 h-6 rounded bg-status-info flex-shrink-0" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+                    {remainingItems.map((id) => {
+                        const Icon = NAV_ICON[id];
+                        const isActive = tab === id;
+                        return (
+                            <button
+                                key={id}
+                                onClick={() => setTab(id)}
+                                className={`w-full flex items-center gap-2.5 rounded-lg mb-0.5 text-[13px] ${sideOpen ? "px-4 py-2" : "px-2.5 py-2 justify-center"} ${isActive ? "bg-status-info/20 text-white font-semibold" : "text-ink-invertedDim hover:bg-white/5"}`}
+                            >
+                                <Icon size={16} />
+                                {sideOpen && navLabels[id]}
                             </button>
                         );
                     })}
                 </nav>
 
-                <div style={{ padding: "12px 8px", borderTop: "1px solid #f0f4f8" }}>
-                    <button onClick={() => setSideOpen(v => !v)}
-                        style={{ 
-                            width: "100%", 
-                            padding: "8px 10px", 
-                            border: "1px solid #e2e8f0", 
-                            borderRadius: 8, 
-                            background: "#f8faff", 
-                            cursor: "pointer", 
-                            fontSize: 12, 
-                            color: "#6b7a99", 
-                            fontFamily: "inherit", 
-                            display: "flex", 
-                            alignItems: "center", 
-                            justifyContent: "center", 
-                            gap: 6 
-                        }}>
-                        {sideOpen && <span>{t("collapse")}</span>}
+                <div className="p-2.5 border-t border-white/5">
+                    <button
+                        onClick={() => setSideOpen((v) => !v)}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-ink-invertedDim hover:text-ink-inverted text-xs py-2 transition-colors"
+                    >
+                        {sideOpen ? <><ChevronLeft size={14} /><span>{t("collapse")}</span></> : <ChevronRight size={14} />}
                     </button>
                 </div>
             </aside>
 
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-                <header style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "0 28px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col min-w-0">
+                <header className="bg-surface-panel border-b border-surface-line px-8 h-16 flex items-center justify-between sticky top-0 z-50 shadow-sm">
                     <div>
-                        <h1 style={{ fontSize: 16, fontWeight: 700, color: "#1a2332", letterSpacing: -0.2 }}>{navLabels[tab]}</h1>
-                        <p style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>{navDescs[tab]}</p>
+                        <h1 className="text-lg font-bold text-ink tracking-tight">{navLabels[tab] || tab}</h1>
+                        <p className="text-xs text-ink-dim mt-0.5">{navDescs[tab] || ""}</p>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div className="flex items-center gap-4">
                         <Clock />
-                        <button onClick={() => setLanguage(language === "en" ? "fr" : "en")}
-                            style={{ padding: "4px 12px", fontSize: 11, fontWeight: 700, border: "1px solid #d1d9e6", borderRadius: 20, background: "#f8faff", cursor: "pointer", color: "#1d6fcc", fontFamily: "inherit" }}>
-                            {language === "en" ? "FR" : "EN"}
+                      
+                        <button
+                            onClick={() => setLanguage(language === "en" ? "fr" : "en")}
+                            className="flex items-center gap-1.5 px-3.5 py-1 text-[11px] font-bold border border-surface-line rounded-full bg-surface hover:bg-status-info hover:text-white hover:border-status-info text-status-info transition-colors"
+                        >
+                            <Globe size={12} />{language === "en" ? "FR" : "EN"}
                         </button>
-                        <div style={{ width: 1, height: 32, background: "#e2e8f0" }} />
-                        <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2332" }}>{user.name}</div>
-                            <span style={{ display: "inline-block", fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 10, marginTop: 2, background: rc.bg, color: rc.color }}>
+                        <div className="w-px h-8 bg-surface-line" />
+                        <div className="text-right">
+                            <div className="text-sm font-semibold text-ink">{user.name}</div>
+                            <span className={`inline-block text-[10px] font-semibold px-3 py-0.5 rounded-full mt-0.5 ${rc}`}>
                                 {roleLabels[user.role]}
                             </span>
                         </div>
-                        <button onClick={logout} style={{ padding: "6px 14px", fontSize: 12, fontWeight: 500, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, cursor: "pointer", color: "#374151", fontFamily: "inherit" }}>
-                            {t("logout")}
+                        <button
+                            onClick={logout}
+                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium bg-surface-panel border border-surface-line rounded-lg text-ink-dim hover:bg-status-critical/10 hover:border-status-critical/30 hover:text-status-critical transition-colors"
+                        >
+                            <LogOut size={13} />{t("logout")}
                         </button>
                     </div>
                 </header>
 
-                <main style={{ flex: 1, padding: 28, maxWidth: 1200, width: "100%" }}>
-                    {tab === "kpis"       && <KpiCards />}
-                    {tab === "health"     && <HealthView  userRole={user.role} />}
-                    {tab === "energy"     && <EnergyView  userRole={user.role} />}
+                <SystemStatusBar />
+
+                <main className="flex-1 p-7 max-w-[1400px] w-full mx-auto">
+                    {tab === "kpis"       && <KpiCards userRole={user.role} />}
+                    {tab === "health"     && <HealthView userRole={user.role} />}
+                    {tab === "energy"     && <EnergyView userRole={user.role} />}
                     {tab === "workorders" && <WorkOrdersView userRole={user.role} />}
                     {tab === "alerts"     && <AlertsPanel userRole={user.role} />}
                     {tab === "user"       && <UserManagement />}
-                    {tab === "audit"      && <AuditLogView />}                                                   
+                    {tab === "audit"      && <AuditLogView />}
                     {tab === "mqtt"       && <MqttMonitorView userRole={user.role} />}
-                    {tab === "teamchat"   && <CustomTeamChat userRole={user.role} currentUser={currentUser} />}
+                    {tab === "ml"         && <MLDashboardView userRole={user.role} />}
+                    {tab === "calendar"   && <PredictiveCalendar userRole={user.role} />}
+                    {tab === "anomaly"    && <AnomalyPlayground userRole={user.role} />}
                 </main>
             </div>
-            <Chatbot />
+
+            <ChatWidget />
+            <FailureInjectorDrawer
+                open={injectorOpen}
+                onClose={() => setInjectorOpen(false)}
+                alarmEnabled={alarmEnabled}
+                onToggleAlarm={setAlarmEnabled}
+            />
         </div>
     );
 }

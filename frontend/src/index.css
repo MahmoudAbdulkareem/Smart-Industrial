@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --status-normal: #12B886;
+  --status-elevated: #F0A93A;
+  --status-critical: #E6484B;
+  --status-info: #5AA9E6;
+}
+
+html, body {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono, code, pre {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* Thin, industrial scrollbars for panels */
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: theme('colors.base.line');
+  border-radius: 3px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Status pulse ring used on Digital Twin hotspots / alert dots */
+.status-ring {
+  position: relative;
+}
+.status-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid currentColor;
+  animation: pulseRing 1.8s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  70% { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-ring::after { animation: none; }
+}

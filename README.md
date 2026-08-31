@@ -1,543 +1,147 @@
-# Smart Dashboard
+# SmartDashboard — Real-Data Industrial Monitoring Platform
 
-Complete setup, configuration and feature documentation for the Smart Dashboard application.
+Rebuilt against SQL Server with a real (or generated) industrial dataset, a layered Express
+backend, an Isolation Forest anomaly detection pipeline, and a local + real IBM Maximo MIF
+integration layer.
 
----
-
-# Table of Contents
-
-* Project Overview
-
-* Requirements
-
-* Installation
-
-* Running the Project
-
-* Environment Variables
-
-* Database Setup
-
-* Database Migration (2FA)
-
-* Demo Accounts
-
-* Authentication (2FA)
-
-* Reset 2FA (Admin)
-
-* User Roles
-
-* Features
-
-* Energy View
-
-* Health View
-
-* Export Functionality
-
-* Chatbot Integration
-
-* Project Structure
-
-* First Time Setup Checklist
-
-* Troubleshooting
-
----
-
-# Project Overview
-
-The Smart Dashboard is a web application. It provides system monitoring, energy analytics, user management and reporting tools. The application includes role-based access control, two-factor authentication, exports and an integrated AI chatbot.
-
-The project consists of two parts:
-
-* Backend (Node.js / Express API)
-
-* Frontend (React Dashboard UI)
-
----
-
-# Requirements
-
-Before running the project you need to install:
-
-* Node.js (version 18 or newer is recommended)
-
-* npm
-
-* SQL Server / existing project database
-
-* Google Authenticator ( app for 2FA)
-
----
-
-# Installation
-
-To install, clone the repository and install dependencies.
-
-## Backend
-
-```bash
-
-cd backend
-
-npm install
+## Structure
 
 ```
+backend/
+  server.js                  Thin bootstrap: express app, socket.io, cron, mqtt
+  db/pool.js                 SQL Server connection pool
+  middleware/auth.js         JWT auth + role guards
+  routes/                    Express routers (thin, one per domain)
+  controllers/               Request handlers
+  services/                  Business logic (energy, maximo, maximoClient, notifications,
+                              reports, ml proxy, sockets, mqtt, broadcast, audit)
+  repositories/               Raw SQL access (users, telemetry, alerts, notification logs)
+  scripts/publisher.js        Combined publisher: replays real telemetry_raw + energy_metrics onto MQTT
+
+ml-service/
+  main.py                    FastAPI inference endpoint used by backend's mlProxyService
+  train.py                   Trains Isolation Forest + RUL regressor on real ingested telemetry
+  dataset/generate_dataset.py  Generates a realistic run-to-failure bearing dataset (no download needed)
+  dataset/bearing_telemetry_dataset.csv  The generated dataset, ready to ingest
+  dataset/ingest_dataset.py  Loads the generated CSV into SQL Server
+  ingestion/ims_ingest.py    Alternative: batch-loads the real NASA IMS Bearing dataset instead
+  pipeline/anomaly_pipeline.py  Isolation Forest over rolling-window sensor statistics, writes
+                             ml_inference_results, auto-creates Maximo work orders on anomalies
+  visualize_degradation.py   Generates report-ready anomaly score charts per asset
+
+sql/
+  base_schema.sql            Original core schema (users, assets, alerts, work_orders, energy_metrics, chat)
+  schema_extension.sql       telemetry_raw, ml_model_registry, ml_inference_results,
+                             maximo_assets, maximo_workorders, maximo_sync_log
+
+frontend/                    React app — RUL display fixed, Maximo Sync panel added for IT admins
+mosquitto/                   MQTT broker config (unchanged)
+```
+
+## Setup
+
+1. Run `sql/base_schema.sql` then `sql/schema_extension.sql` against your `SmartDashboard` database.
+2. `cd ml-service && pip install -r requirements.txt --break-system-packages && pip install matplotlib --break-system-packages`
+3. Ingest data — pick one:
+   - **Generated dataset (fastest, already included):** `python dataset/ingest_dataset.py`
+     (re-generate anytime with `python dataset/generate_dataset.py`)
+   - **Real NASA IMS dataset:** download it, set `IMS_DATASET_ROOT` to the extracted folder,
+     run `python ingestion/ims_ingest.py`
+4. Run `python pipeline/anomaly_pipeline.py` to populate `ml_inference_results` and seed Maximo work orders.
+5. Optionally run `python visualize_degradation.py` for report-ready charts.
+6. Run `python train.py` to produce `model.pkl` / `scaler.pkl` / `rul_model.pkl`, then
+   `uvicorn main:app --port 8000`.
+7. `cd backend && npm install && npm start`.
+8. Start the MQTT broker: `mosquitto -c mosquitto/mosquitto.conf`.
+9. Replay real data onto MQTT: `cd backend && npm run publish`.
+10. `cd frontend && npm install && npm start`.
+
+## Connecting to a real IBM Maximo instance
+
+By default the project runs entirely in **local mode** — `maximo_workorders` /
+`maximo_sync_log` behave like a private mock of Maximo, and nothing leaves your machine.
+To push real work orders into an actual Maximo instance:
+
+1. **Get an API key** — in Maximo, as an administrator: **Administration → Work Centers →
+   Integration → API Keys → Add API Key**. Pick (or create) a dedicated service user for
+   this integration, save, and copy the key immediately — Maximo only shows it once.
+2. Set these three variables in `backend/.env`:
+   ```
+   MAXIMO_BASE_URL=https://your-instance.example.com/maximo
+   MAXIMO_API_KEY=your-copied-key
+   MAXIMO_SITE_ID=YOURSITE
+   ```
+   Leaving `MAXIMO_API_KEY` blank keeps the project in local-only mode — nothing changes
+   until you fill it in.
+3. **Make sure `maximo_assets.assetnum` holds real Maximo asset numbers**, not the local
+   `AST-001`-style IDs — Maximo will reject a work order for an asset number it doesn't
+   recognize. Update the mapping:
+   ```sql
+   UPDATE maximo_assets SET assetnum = 'REAL-ASSET-NUM' WHERE asset_id = 'AST-001';
+   ```
+4. Restart the backend. From then on:
+   - Every work order created locally (manually or by the ML pipeline) is pushed to real
+     Maximo immediately via `POST /oslc/os/mxapiwo`, using the `apikey` header.
+   - If Maximo is briefly unreachable, the attempt is marked `FAILED` in `maximo_sync_log`
+     and a cron job (`server.js`, every 5 minutes) automatically retries anything still
+     `PENDING`.
+   - Test the connection any time: `GET /api/maximo/test-connection` (IT admin only).
+   - Manually trigger a retry sweep: `POST /api/maximo/sync/retry` (IT admin only).
+   - Check status visually in the frontend under **Management → Maximo Sync** (IT admin role).
+5. The ML pipeline (`pipeline/anomaly_pipeline.py`) is unchanged by this — it still just
+   writes to `maximo_workorders`/`maximo_sync_log` in SQL Server. The Node backend's retry
+   cron job is what actually pushes those rows out to real Maximo, so you don't need to
+   touch the Python side at all to go from local-only to fully integrated.
+
+## What changed from the previous version
+
+- **STL decomposition removed from the anomaly pipeline.** `pipeline/anomaly_pipeline.py`
+  (replaces `pipeline/stl_anomaly.py`) now runs Isolation Forest directly on rolling-window
+  statistics of the raw sensor signal (RMS mean/std, kurtosis mean, peak-to-peak mean) instead
+  of first decomposing into trend/seasonal/residual components. `ml_inference_results.residual_component`
+  now stores the window's RMS standard deviation (still a meaningful degradation signal);
+  `trend_component`/`seasonal_component` are no longer populated (left `NULL` — the schema
+  didn't need to change, those columns were already nullable). `train.py` and `main.py`'s RUL
+  model were updated to match the smaller feature set. `statsmodels` is no longer a dependency.
+- **New IT-admin "Maximo Sync" panel** (`frontend/src/components/MaximoSyncPanel.js`) shows
+  live connection status to your real Maximo instance, and the outbound sync queue
+  (PENDING/SENT/FAILED counts + recent history), with a manual "retry now" button. Backed by
+  two new endpoints: `GET /api/maximo/sync/recent` and the existing `POST /api/maximo/sync/retry`
+  / `GET /api/maximo/test-connection`.
+- **Real Maximo push integration** — `backend/services/maximoClient.js` talks to a real
+  Maximo instance via `apikey` header auth; `maximoService.js` pushes every locally created
+  work order automatically when `MAXIMO_BASE_URL`/`MAXIMO_API_KEY` are set, with automatic
+  retry for anything that fails.
+- A ready-to-use dataset is generated for you — no external download required.
+  `ml-service/dataset/generate_dataset.py` produces `bearing_telemetry_dataset.csv`: five
+  assets (`AST-001`–`AST-005`), 10-minute cadence, 34-day run, each with a staggered
+  sigmoid degradation curve so every asset fails at a different point in the run. All
+  three sensor channels are generated — vibration, temperature, and pressure — the
+  latter two correlated with the same degradation curve so a failing asset shows a
+  coherent story across all three, not just vibration.
+  `ml-service/dataset/ingest_dataset.py` loads that CSV into `telemetry_raw`. The real IMS
+  ingestion script is still included if you want to switch to it later (vibration-only).
+- **`dbPublisher.js` and `dbEnergyPublisher.js` are merged into one file**,
+  `backend/scripts/publisher.js`, run with `npm run publish` from `backend/`. It loads every
+  real row from `telemetry_raw` and `energy_metrics` and replays them on a loop over MQTT.
+- `services/mqttService.js` no longer requires both `vibration` and `temperature` before
+  evaluating a reading — it debounces incoming metrics per asset for 400ms and evaluates once
+  `vibration` or `rms` is present.
+- `repositories/telemetryRepository.js` — health score is derived from the validated
+  `degradation_state` band (NORMAL/WARNING/CRITICAL) instead of a raw anomaly-score offset
+  that was clipping to 0.
+- `frontend/src/components/HealthView.js` — RUL is correctly converted from hours to days for
+  display and CSV/Excel export.
+- All other synthetic generation (the old random fallback broadcaster in `server.js`) is
+  removed in favor of `services/broadcastService.js`, which broadcasts real DB-backed state.
+- `server.js` no longer contains business logic — it only wires routers, sockets, and cron jobs.
+- `GET /api/assets/health` returns `healthScore`, `degradationState`, and `rul` derived from
+  `ml_inference_results`, not from in-memory formulas.
 
 ## Frontend
 
-```bash
-
-cd frontend
-
-npm install
-
-```
-
----
-
-# Running the Project
-
-Run the backend and frontend in two terminals.
-
-## Terminal 1. Backend
-
-```bash
-
-cd backend
-
-npm run seed
-
-npm start
-
-```
-
-## Terminal 2. Frontend
-
-```bash
-
-cd frontend
-
-npm start
-
-```
-
-The default ports are:
-
-Backend: [http://localhost:5000](http://localhost:5000)
-
-Frontend: [http://localhost:3000](http://localhost:3000)
-
----
-
-# Environment Variables
-
-Create a `.env` file inside the frontend folder.
-
-frontend/.env
-
-```bash
-
-REACT_APP_GEMINI_API_KEY=your_api_key_here
-
-```
-
-This key is used for the Smart Dashboard chatbot.
-
----
-
-# Database Setup
-
-The application uses an existing users table. The seed script creates demo users for testing.
-
-To run use:
-
-```bash
-
-npm run seed
-
-```
-
-This will insert demo accounts.
-
----
-
-# Database Migration (2FA)
-
-If you are upgrading an existing database run the following SQL:
-
-```sql
-
-ALTER TABLE users ADD totp_secret NVARCHAR(100) NULL;
-
-ALTER TABLE users ADD totp_enabled BIT NOT DEFAULT 0;
-
-GO
-
-```
-
-New columns:
-
-| Column       | Description                          |
-
-| ------------ | ------------------------------------ |
-
-| totp_secret  | Secret used for Google Authenticator
-
-| totp_enabled | Indicates if 2FA is enabled          |
-
----
-
-# Demo Accounts
-
-After running the seed script:
-
-| Role                 | Email                                                         | Password       |
-
-| -------------------- | ------------------------------------------------------------- | --------------
-
-| Maintenance Engineer | [maintenance@dashboard.com](mailto:maintenance@dashboard.com) | maintenance123 |
-
-| Energy Manager       | [energy@dashboard.com](mailto:energy@dashboard.com)           | energy123      |
-
-| IT Admin             | [itadmin@dashboard.com](mailto:itadmin@dashboard.com)         | itadmin123
-
-On the first login each account will require 2FA setup.
-
----
-
-# Authentication (Two‑Factor Authentication)
-
-The Smart Dashboard uses Google Authenticator (TOTP) for login security.
-
-## First Login Flow
-
-1. The user enters their email and password.
-
-2. The server validates the credentials.
-
-3. If 2FA is not configured a QR code screen appears.
-
-4. The user scans the QR code with Google Authenticator.
-
-5. The user enters the 6-digit code.
-
-6. 2FA is enabled.
-
-## Subsequent Login Flow
-
-1. Enter email and password.
-
-2. Open the authenticator app.
-
-3. Enter the 6-digit code.
-
-4. Login is successful.
-
-No email or SMS is required.
-
----
-
-# Install Google Authenticator
-
-Download the app:
-
-Android
-
-[https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2](https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2)
-
-iOS
-
-[https://apps.apple.com/app/google-authenticator/id388497605](https://apps.apple.com/app/google-authenticator/id388497605)
-
-Other supported apps:
-
-* Microsoft Authenticator
-
-* Authy
-
-* 1Password
-
----
-
-# Reset 2FA (IT Admin)
-
-If a user loses their phone:
-
-1. Login as IT Admin.
-
-2. Go to User Management.
-
-3. Click the user details icon.
-
-4. Click Reset 2FA.
-
-5. Save.
-
-The next login will show the QR setup again.
-
----
-
-# User Roles
-
-## IT Admin
-
-Permissions:
-
-* Create users
-
-* Edit users
-
-* Activate / deactivate users
-
-* Reset 2FA
-
-* View all dashboards
-
-## Energy Manager
-
-Permissions:
-
-* View energy dashboard
-
-* Export reports
-
-* View analytics
-
-## Maintenance Engineer
-
-Permissions:
-
-* View system health
-
-* Access maintenance data
-
-* Monitor metrics
-
----
-
-# Features
-
-## Authentication
-
-* Email and password login
-
-* Google Authenticator 2FA
-
-* QR code setup
-
-* Admin reset 2FA
-
-* Secure TOTP verification
-
-## User Management
-
-* Create users
-
-* Edit users
-
-* users
-
-* Phone number field
-
-* Role assignment
-
-* Activate / deactivate user
-
----
-
-# Energy View
-
-The new redesign includes:
-
-* Improved layout
-
-* Updated charts
-
-* Cleaner UI
-
-* Better filtering
-
-* Export support
-
----
-
-# Health View
-
-Includes:
-
-* System metrics
-
-* Monitoring panels
-
-* Performance indicators
-
-* Export support
-
----
-
-# Export Functionality
-
-Available in:
-
-* Energy View
-
-* Health View
-
-Supported formats:
-
-* PDF
-
-* Excel
-
-* CSV
-
-Exports include:
-
-* Tables
-
-* Charts
-
-* Filtered results
-
-* Date range data
-
----
-
-# Chatbot Integration
-
-The Smart Dashboard includes an AI assistant.
-
-Model:
-
-Gemini 1.5 Flash
-
-Configured using:
-
-frontend/.env
-
-```bash
-
-REACT_APP_GEMINI_API_KEY=your_key_here
-
-```
-
-Capabilities:
-
-* Explain dashboard metrics
-
-* Help navigate UI
-
-* Answer data questions
-
-* Provide help
-
----
-
-# Project Structure
-
-```bash
-
-smart-dashboard/
-
-backend/
-
-├── controllers/
-
-├── routes/
-
-├── middleware/
-
-├── seed/
-
-└── server.js
-
-frontend/
-
-├── components/
-
-├── pages/
-
-├── services/
-
-└── App.js
-
-README.md
-
-```
-
----
-
-# First Time Setup Checklist
-
-1. Install backend dependencies.
-
-2. Install frontend dependencies.
-
-3. Run database seed.
-
-4. Start backend.
-
-5. Start frontend.
-
-6. Login using demo account.
-
-7. Scan QR code.
-
-8. Enter 6-digit code.
-
-9. Dashboard is ready.
-
----
-
-# Troubleshooting
-
-## QR Code not showing
-
-* Ensure backend is running.
-
-* Check totp_enabled = 0.
-
-* Reload login page.
-
-## Invalid authenticator code
-
-* Check phone time sync.
-
-* Wait for code.
-
-* Reset 2FA if needed.
-
-## Cannot login after enabling 2FA
-
-* Reset 2FA, from IT Admin.
-
-* Login again.
-
----
-
-# Added in This Version
-
-* Google Authenticator 2FA
-
-* QR setup screen
-
-* TOTP verification backend
-
-* Reset 2FA (Admin)
-
-* Phone number field
-
-* Energy view redesign
-
-* Export PDF / Excel / CSV
-
-* Gemini chatbot integration
-
-* Seed demo accounts
-
----
-
-End of README
+The React app under `frontend/` keeps its original structure. Its API calls to
+`/api/assets`, `/api/workorders`, `/api/energy/*`, `/api/alerts`, `/api/chat/*`, `/api/users`
+still work against the new backend, since those routes were preserved. A new tab, **Maximo
+Sync** (IT admin role only), was added under the Management group. Components that read asset
+fields like `healthScore` or `rul` receive real, ML-derived values instead of synthetic ones.

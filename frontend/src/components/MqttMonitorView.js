@@ -4,7 +4,7 @@ import { useSocket } from '../hooks/useSocket';
 // Simple icons
 const Icon = {
   Broadcast: () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2E86C1" strokeWidth="2">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5AA9E6" strokeWidth="2">
       <circle cx="12" cy="12" r="2"/>
       <path d="M16.24 7.76a6 6 0 0 1 0 8.48M7.76 7.76a6 6 0 0 0 0 8.48M4.93 4.93a10 10 0 0 0 0 14.14M19.07 4.93a10 10 0 0 1 0 14.14"/>
     </svg>
@@ -49,19 +49,19 @@ const BUFFER = 500;
 const SENSOR_CONFIG = {
   temperature: {
     label: '🌡️ Temperature',
-    color: '#E74C3C',
+    color: '#E6484B',
     unit: '°C',
     warn: (v) => v > 85 ? '⚠ HIGH' : null
   },
   vibration: {
     label: '📳 Vibration',
-    color: '#F39C12',
+    color: '#F0A93A',
     unit: 'mm/s',
     warn: (v) => v > 8 ? '⚠ HIGH' : null
   },
   pressure: {
     label: '📊 Pressure',
-    color: '#9B59B6',
+    color: '#8B5CF6',
     unit: 'bar',
     warn: (v) => (v < 1.0 || v > 5.0) ? '⚠ OUT OF RANGE' : null
   }
@@ -69,7 +69,7 @@ const SENSOR_CONFIG = {
 
 const getSensor = (type) => SENSOR_CONFIG[type] || { 
   label: '📡 ' + type, 
-  color: '#5DADE2', 
+  color: '#5AA9E6', 
   unit: '',
   warn: () => null 
 };
@@ -102,62 +102,89 @@ export default function MqttMonitorView() {
   };
 
   // Socket handlers
-  const handlers = {
+  // In MqttMonitorView.js, update the socket handlers to handle both event formats
+
+const handlers = {
     'sensor:reading': (data) => {
-      if (pausedRef.current) return;
+        if (pausedRef.current) return;
 
-      console.log('[MQTT] Received sensor reading:', data);
-      
-      const now = Date.now();
-      const assetId = data.assetId || 'unknown';
-      const sensors = data.sensors || {};
-      
-      Object.entries(sensors).forEach(([sensorType, value]) => {
-        const numVal = parseFloat(value);
-        if (isNaN(numVal)) return;
-
-        counter.current += 1;
+        console.log('[MQTT] Received sensor reading:', data);
         
-        const config = getSensor(sensorType);
-        const warning = config.warn ? config.warn(numVal) : null;
-
-        setStats(prev => ({
-          total: prev.total + 1,
-          rate: prev.rate,
-          byAsset: { ...prev.byAsset, [assetId]: (prev.byAsset[assetId] || 0) + 1 },
-          byType: { ...prev.byType, [sensorType]: (prev.byType[sensorType] || 0) + 1 }
-        }));
-
-        const msg = {
-          id: counter.current,
-          assetId,
-          sensorType,
-          value: numVal,
-          unit: config.unit,
-          color: config.color,
-          label: config.label,
-          warning,
-          timestamp: now,
-          time: new Date(now).toLocaleTimeString('en', { 
-            hour12: false, 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            second: '2-digit' 
-          }),
-          raw: data,
-          topic: `sensor_readings/${assetId}/${sensorType}`
-        };
-
-        setMessages(prev => {
-          const updated = [msg, ...prev];
-          return updated.slice(0, BUFFER);
+        const now = Date.now();
+        // Handle both possible data formats
+        const assetId = data.assetId || data.asset_id || 'unknown';
+        const sensors = data.sensors || data;
+        
+        // Extract sensor values
+        const entries = [];
+        const sensorTypes = ['temperature', 'vibration', 'pressure', 'rms', 'kurtosis', 'peak_to_peak'];
+        
+        sensorTypes.forEach(type => {
+            let value = sensors[type];
+            // Also check for camelCase versions
+            if (value === undefined || value === null) {
+                const camelType = type.replace(/_([a-z])/g, (m, p1) => p1.toUpperCase());
+                value = sensors[camelType];
+            }
+            
+            if (value !== undefined && value !== null && !isNaN(parseFloat(value))) {
+                entries.push({ type, value: parseFloat(value) });
+            }
         });
-      });
+
+        entries.forEach(({ type, value }) => {
+            counter.current += 1;
+            
+            const config = getSensor(type);
+            const warning = config.warn ? config.warn(value) : null;
+
+            setStats(prev => ({
+                total: prev.total + 1,
+                rate: prev.rate,
+                byAsset: { ...prev.byAsset, [assetId]: (prev.byAsset[assetId] || 0) + 1 },
+                byType: { ...prev.byType, [type]: (prev.byType[type] || 0) + 1 }
+            }));
+
+            const msg = {
+                id: counter.current,
+                assetId,
+                sensorType: type,
+                value: value,
+                unit: config.unit,
+                color: config.color,
+                label: config.label,
+                warning,
+                timestamp: now,
+                time: new Date(now).toLocaleTimeString('en', { 
+                    hour12: false, 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                }),
+                raw: data,
+                topic: `telemetry/${assetId}/${type}`
+            };
+
+            setMessages(prev => {
+                const updated = [msg, ...prev];
+                return updated.slice(0, BUFFER);
+            });
+        });
+    },
+    'telemetry:reading': (data) => {
+        // Also handle telemetry:reading events as fallback
+        if (pausedRef.current) return;
+        console.log('[MQTT] Received telemetry reading (fallback):', data);
+        // Re-emit as sensor:reading format
+        handlers['sensor:reading'](data);
     },
     'mqtt:packet': (data) => {
-      console.log('[MQTT] MQTT Packet:', data);
+        console.log('[MQTT] MQTT Packet:', data);
+    },
+    'mqtt:message': (data) => {
+        console.log('[MQTT] MQTT Message:', data);
     }
-  };
+};
 
   const { isConnected } = useSocket(handlers);
 
@@ -209,9 +236,9 @@ export default function MqttMonitorView() {
   };
 
   const statusDot = () => {
-    if (!isConnected) return { label: 'OFFLINE', color: '#E74C3C' };
-    if (messages.length === 0) return { label: 'WAITING', color: '#F39C12' };
-    return { label: 'LIVE', color: '#27AE60' };
+    if (!isConnected) return { label: 'OFFLINE', color: '#E6484B' };
+    if (messages.length === 0) return { label: 'WAITING', color: '#F0A93A' };
+    return { label: 'LIVE', color: '#12B886' };
   };
 
   const dot = statusDot();
@@ -239,7 +266,6 @@ export default function MqttMonitorView() {
       {/* Stats Bar */}
       <div style={styles.statsBar}>
         <div style={styles.statsSection}>
-          <span style={styles.statsLabel}>Assets:</span>
           {Object.entries(stats.byAsset).slice(0, 5).map(([asset, count]) => (
             <span key={asset} style={styles.assetTag}>
               {asset} <span style={styles.countBadge}>{count}</span>
@@ -250,7 +276,6 @@ export default function MqttMonitorView() {
           )}
         </div>
         <div style={styles.statsSection}>
-          <span style={styles.statsLabel}>Sensors:</span>
           {Object.entries(stats.byType).map(([type, count]) => {
             const config = getSensor(type);
             return (
@@ -418,7 +443,7 @@ export default function MqttMonitorView() {
                 </div>
                 <div style={styles.field}>
                   <label style={styles.fieldLabel}>📊 Value</label>
-                  <div style={{ ...styles.fieldValue, color: '#27AE60', fontWeight: 700 }}>
+                  <div style={{ ...styles.fieldValue, color: '#12B886', fontWeight: 700 }}>
                     {selected.value.toFixed(2)} {selected.unit}
                   </div>
                 </div>
@@ -483,11 +508,11 @@ const styles = {
     flexDirection: 'column',
     height: 'calc(100vh - 80px)',
     padding: '16px',
-    background: 'linear-gradient(135deg, #0a1628, #1a2a4a)',
+    background: 'linear-gradient(135deg, #0B0F14, #121822)',
     borderRadius: '12px',
     gap: '12px',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#e0e0e0'
+    color: '#E2E8F0'
   },
   header: {
     display: 'flex',
@@ -505,7 +530,7 @@ const styles = {
     fontSize: '18px',
     fontWeight: 700,
     margin: 0,
-    background: 'linear-gradient(135deg, #5DADE2, #2E86C1)',
+    background: 'linear-gradient(135deg, #5AA9E6, #5AA9E6)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent'
   },
@@ -526,13 +551,13 @@ const styles = {
     display: 'inline-block',
     animation: 'pulse 1.5s ease-in-out infinite'
   },
-  badgeText: { color: '#e0e0e0', letterSpacing: '0.5px' },
+  badgeText: { color: '#E2E8F0', letterSpacing: '0.5px' },
   right: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
     fontSize: '12px',
-    color: '#95A5A6'
+    color: '#5B6B7D'
   },
   stat: { display: 'flex', alignItems: 'center', gap: '4px' },
   statsBar: {
@@ -546,20 +571,20 @@ const styles = {
     fontSize: '12px'
   },
   statsSection: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' },
-  statsLabel: { color: '#95A5A6', fontWeight: 600 },
+  statsLabel: { color: '#5B6B7D', fontWeight: 600 },
   assetTag: {
     padding: '2px 8px',
     background: 'rgba(52, 152, 219, 0.15)',
     borderRadius: '12px',
-    color: '#3498DB',
+    color: '#5AA9E6',
     fontSize: '11px'
   },
-  countBadge: { color: '#95A5A6', marginLeft: '2px' },
+  countBadge: { color: '#5B6B7D', marginLeft: '2px' },
   moreTag: {
     padding: '2px 8px',
     background: 'rgba(255,255,255,0.05)',
     borderRadius: '12px',
-    color: '#95A5A6',
+    color: '#5B6B7D',
     fontSize: '11px'
   },
   sensorTag: {
@@ -598,7 +623,7 @@ const styles = {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '6px',
-    color: '#e0e0e0',
+    color: '#E2E8F0',
     fontSize: '12px',
     outline: 'none',
     minWidth: '120px'
@@ -608,7 +633,7 @@ const styles = {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '6px',
-    color: '#e0e0e0',
+    color: '#E2E8F0',
     fontSize: '12px',
     outline: 'none',
     cursor: 'pointer',
@@ -622,7 +647,7 @@ const styles = {
     background: 'rgba(231, 76, 60, 0.15)',
     border: '1px solid rgba(231, 76, 60, 0.2)',
     borderRadius: '6px',
-    color: '#E74C3C',
+    color: '#E6484B',
     cursor: 'pointer',
     fontSize: '11px',
     whiteSpace: 'nowrap'
@@ -635,7 +660,7 @@ const styles = {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '6px',
-    color: '#e0e0e0',
+    color: '#E2E8F0',
     cursor: 'pointer',
     fontSize: '12px',
     fontWeight: 500,
@@ -649,7 +674,7 @@ const styles = {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '6px',
-    color: '#95A5A6',
+    color: '#5B6B7D',
     cursor: 'pointer',
     fontSize: '12px',
     whiteSpace: 'nowrap'
@@ -665,7 +690,7 @@ const styles = {
   },
   filterInfoText: {
     fontSize: '11px',
-    color: '#95A5A6',
+    color: '#5B6B7D',
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
@@ -675,12 +700,12 @@ const styles = {
     padding: '2px 8px',
     background: 'rgba(52, 152, 219, 0.15)',
     borderRadius: '12px',
-    color: '#5DADE2',
+    color: '#5AA9E6',
     fontSize: '10px'
   },
   filterCount: {
     marginLeft: '4px',
-    color: '#e0e0e0',
+    color: '#E2E8F0',
     fontWeight: 600
   },
   feed: {
@@ -694,7 +719,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: '#5D6D7E'
+    color: '#5B6B7D'
   },
   emptyIcon: { fontSize: '48px', marginBottom: '16px', opacity: 0.5 },
   emptyText: { fontSize: '16px', margin: 0 },
@@ -712,17 +737,17 @@ const styles = {
     transition: 'background 0.15s',
     animation: 'slideIn 0.2s ease-out'
   },
-  rowId: { color: '#5D6D7E', fontSize: '10px' },
+  rowId: { color: '#5B6B7D', fontSize: '10px' },
   rowAsset: { fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   rowType: { fontSize: '11px' },
-  rowValue: { color: '#27AE60', fontWeight: 700, fontSize: '13px' },
-  rowTime: { color: '#5D6D7E', fontSize: '10px' },
+  rowValue: { color: '#12B886', fontWeight: 700, fontSize: '13px' },
+  rowTime: { color: '#5B6B7D', fontSize: '10px' },
   warningBadge: {
     padding: '2px 8px',
     borderRadius: '12px',
     fontSize: '9px',
     fontWeight: 700,
-    background: '#E74C3C',
+    background: '#E6484B',
     color: 'white',
     animation: 'blink 1s ease-in-out infinite',
     whiteSpace: 'nowrap'
@@ -741,7 +766,7 @@ const styles = {
   inspectorTitle: {
     fontSize: '12px',
     fontWeight: 700,
-    color: '#5DADE2',
+    color: '#5AA9E6',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
     margin: '0 0 16px',
@@ -749,24 +774,24 @@ const styles = {
     alignItems: 'center',
     gap: '8px'
   },
-  inspectorId: { marginLeft: 'auto', fontSize: '10px', color: '#5D6D7E', fontWeight: 400 },
+  inspectorId: { marginLeft: 'auto', fontSize: '10px', color: '#5B6B7D', fontWeight: 400 },
   inspectorContent: { flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
   field: { display: 'flex', flexDirection: 'column', gap: '4px' },
   fieldLabel: {
     fontSize: '10px',
-    color: '#95A5A6',
+    color: '#5B6B7D',
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: '0.3px'
   },
-  fieldValue: { fontSize: '13px', color: '#e0e0e0', wordBreak: 'break-word' },
+  fieldValue: { fontSize: '13px', color: '#E2E8F0', wordBreak: 'break-word' },
   warningBox: {
     padding: '8px 12px',
     background: 'rgba(231, 76, 60, 0.15)',
-    border: '1px solid #E74C3C',
+    border: '1px solid #E6484B',
     borderRadius: '4px',
-    color: '#E74C3C',
+    color: '#E6484B',
     fontSize: '11px',
     fontWeight: 600,
     textAlign: 'center'
@@ -776,8 +801,8 @@ const styles = {
     padding: '10px',
     borderRadius: '4px',
     fontSize: '11px',
-    color: '#5DADE2',
-    fontFamily: 'monospace',
+    color: '#5AA9E6',
+    fontFamily: "'IBM Plex Mono', monospace",
     overflow: 'auto',
     maxHeight: '150px',
     margin: 0,
@@ -789,7 +814,7 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#5D6D7E'
+    color: '#5B6B7D'
   },
   emptyInspectorIcon: { fontSize: '32px', marginBottom: '12px', opacity: 0.4 },
   emptyInspectorSub: { fontSize: '11px', opacity: 0.6, margin: '4px 0 0' }

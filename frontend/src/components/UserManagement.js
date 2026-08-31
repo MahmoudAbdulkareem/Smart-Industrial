@@ -4,9 +4,9 @@ import { useLanguage } from "../context/LanguageContext";
 const PAGE_SIZE = 8;
 
 const ROLE_BADGE = {
-    maintenance_engineer: { bg: "#dbeafe", color: "#1d4ed8" },
-    energy_manager:       { bg: "#dcfce7", color: "#166534" },
-    it_admin:             { bg: "#ede9fe", color: "#6d28d9" },
+    maintenance_engineer: { bg: "#dbeafe", color: "#4A8FCB" },
+    energy_manager:       { bg: "#E8F8F2", color: "#0E9370" },
+    it_admin:             { bg: "#ede9fe", color: "#7C3AED" },
 };
 
 function getToken() { return localStorage.getItem("token"); }
@@ -29,7 +29,7 @@ function hoursUntilDeletion(deactivatedAt) {
 function Toast({ message, type, onDone }) {
     useEffect(() => { const id = setTimeout(onDone, 3200); return () => clearTimeout(id); }, [onDone]);
     return (
-        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 999, background: type === "success" ? "#f0fdf4" : "#fef2f2", border: "1px solid " + (type === "success" ? "#bbf7d0" : "#fecaca"), borderRadius: 10, padding: "14px 20px", fontSize: 13, color: type === "success" ? "#15803d" : "#b91c1c", boxShadow: "0 4px 20px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 8, animation: "slideInToast 0.25s ease" }}>
+        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 999, background: type === "success" ? "#E8F8F2" : "#FBEAEA", border: "1px solid " + (type === "success" ? "#A8E6CC" : "#F3B7B8"), borderRadius: 10, padding: "14px 20px", fontSize: 13, color: type === "success" ? "#0E9370" : "#B23A3D", boxShadow: "0 4px 20px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 8, animation: "slideInToast 0.25s ease" }}>
             {type === "success" ? "✓" : "⚠"} {message}
         </div>
     );
@@ -51,7 +51,7 @@ function Field({ label, error, children }) {
         <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 6 }}>{label}</label>
             {children}
-            {error && <p style={{ margin: "4px 0 0", fontSize: 12, color: "#dc2626" }}>{error}</p>}
+            {error && <p style={{ margin: "4px 0 0", fontSize: 12, color: "#E6484B" }}>{error}</p>}
         </div>
     );
 }
@@ -95,37 +95,37 @@ function UserFormModal({ user, onClose, onSaved }) {
         setSaving(false);
     }
 
-    const inp = { width: "100%", padding: "9px 12px", fontSize: 13, border: "1px solid #d1d9e6", borderRadius: 8, color: "#1a2332", fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
+    const inp = { width: "100%", padding: "9px 12px", fontSize: 13, border: "1px solid #E2E8F0", borderRadius: 8, color: "#0B0F14", fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
 
     return (
         <Modal onClose={onClose}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a2332" }}>{isEdit ? t("modalEditTitle") : t("modalAddTitle")}</h3>
-                <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, color: "#9aa5b4", cursor: "pointer" }}>×</button>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0B0F14" }}>{isEdit ? t("modalEditTitle") : t("modalAddTitle")}</h3>
+                <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, color: "#8493A6", cursor: "pointer" }}>×</button>
             </div>
             <Field label={t("fieldName")} error={errors.name}>
-                <input value={form.name} onChange={e => set("name", e.target.value)} placeholder={t("placeholderName")} style={{ ...inp, borderColor: errors.name ? "#fca5a5" : "#d1d9e6" }} />
+                <input value={form.name} onChange={e => set("name", e.target.value)} placeholder={t("placeholderName")} style={{ ...inp, borderColor: errors.name ? "#F3B7B8" : "#E2E8F0" }} />
             </Field>
             <Field label={t("fieldEmail")} error={errors.email}>
-                <input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder={t("placeholderEmail")} style={{ ...inp, borderColor: errors.email ? "#fca5a5" : "#d1d9e6" }} />
+                <input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder={t("placeholderEmail")} style={{ ...inp, borderColor: errors.email ? "#F3B7B8" : "#E2E8F0" }} />
             </Field>
             <Field label={t("fieldRole")} error={errors.role}>
-                <select value={form.role} onChange={e => set("role", e.target.value)} style={{ ...inp, borderColor: errors.role ? "#fca5a5" : "#d1d9e6" }}>
+                <select value={form.role} onChange={e => set("role", e.target.value)} style={{ ...inp, borderColor: errors.role ? "#F3B7B8" : "#E2E8F0" }}>
                     <option value="">— {t("fieldRole")} —</option>
                     {Object.entries(t("roles")).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
             </Field>
             <Field label={isEdit ? t("fieldPasswordEdit") : t("fieldPassword")} error={errors.password}>
-                <input type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder={t("placeholderPassword")} style={{ ...inp, borderColor: errors.password ? "#fca5a5" : "#d1d9e6" }} />
+                <input type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder={t("placeholderPassword")} style={{ ...inp, borderColor: errors.password ? "#F3B7B8" : "#E2E8F0" }} />
             </Field>
             <Field label="Phone Number (optional)">
                 <input type="tel" value={form.phone_number} onChange={e => set("phone_number", e.target.value)} placeholder="+216 XX XXX XXX" style={{ ...inp }} />
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9aa5b4" }}>Used for SMS notifications (OTP, account alerts). Include country code.</p>
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#8493A6" }}>Used for SMS notifications (OTP, account alerts). Include country code.</p>
             </Field>
-            {apiErr && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>⚠ {apiErr}</div>}
+            {apiErr && <div style={{ background: "#FBEAEA", border: "1px solid #F3B7B8", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#E6484B", marginBottom: 14 }}>⚠ {apiErr}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-                <button onClick={onClose} style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, background: "#fff", border: "1px solid #d1d9e6", color: "#374151", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("cancel")}</button>
-                <button onClick={handleSave} disabled={saving} style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, background: "#1d6fcc", color: "#fff", border: "none", borderRadius: 8, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
+                <button onClick={onClose} style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, background: "#fff", border: "1px solid #E2E8F0", color: "#374151", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("cancel")}</button>
+                <button onClick={handleSave} disabled={saving} style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, background: "#5AA9E6", color: "#fff", border: "none", borderRadius: 8, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
                     {saving ? "…" : t("save")}
                 </button>
             </div>
@@ -141,12 +141,12 @@ function ConfirmDeleteModal({ user, onClose, onConfirm }) {
         <Modal onClose={onClose}>
             <div style={{ textAlign: "center", padding: "8px 0 20px" }}>
                 <div style={{ fontSize: 44, marginBottom: 12 }}></div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a2332", marginBottom: 8 }}>{t("confirmDelete")}</h3>
-                <p style={{ fontSize: 13, color: "#6b7a99", marginBottom: 4 }}>{user.name} — {user.email}</p>
-                <p style={{ fontSize: 12, color: "#9aa5b4", marginBottom: 24 }}>{t("confirmDeleteSub")}</p>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0B0F14", marginBottom: 8 }}>{t("confirmDelete")}</h3>
+                <p style={{ fontSize: 13, color: "#5B6B7D", marginBottom: 4 }}>{user.name} — {user.email}</p>
+                <p style={{ fontSize: 12, color: "#8493A6", marginBottom: 24 }}>{t("confirmDeleteSub")}</p>
                 <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-                    <button onClick={onClose} style={{ padding: "9px 22px", fontSize: 13, fontWeight: 600, background: "#fff", border: "1px solid #d1d9e6", color: "#374151", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("cancel")}</button>
-                    <button onClick={handleConfirm} disabled={loading} style={{ padding: "9px 22px", fontSize: 13, fontWeight: 600, background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: loading ? 0.75 : 1 }}>
+                    <button onClick={onClose} style={{ padding: "9px 22px", fontSize: 13, fontWeight: 600, background: "#fff", border: "1px solid #E2E8F0", color: "#374151", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("cancel")}</button>
+                    <button onClick={handleConfirm} disabled={loading} style={{ padding: "9px 22px", fontSize: 13, fontWeight: 600, background: "#E6484B", color: "#fff", border: "none", borderRadius: 8, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: loading ? 0.75 : 1 }}>
                         {loading ? "…" : t("delete")}
                     </button>
                 </div>
@@ -161,41 +161,41 @@ function DetailModal({ user, onClose }) {
     const badge = ROLE_BADGE[user.role] || { bg: "#f3f4f6", color: "#374151" };
     function Row({ label, children }) {
         return (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f0f4f8" }}>
-                <span style={{ fontSize: 12, color: "#6b7a99", fontWeight: 500 }}>{label}</span>
-                <span style={{ fontSize: 13, color: "#1a2332", fontWeight: 500 }}>{children}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #F5F7FA" }}>
+                <span style={{ fontSize: 12, color: "#5B6B7D", fontWeight: 500 }}>{label}</span>
+                <span style={{ fontSize: 13, color: "#0B0F14", fontWeight: 500 }}>{children}</span>
             </div>
         );
     }
     return (
         <Modal onClose={onClose}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a2332" }}>{t("detailTitle")}</h3>
-                <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, color: "#9aa5b4", cursor: "pointer" }}>×</button>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0B0F14" }}>{t("detailTitle")}</h3>
+                <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, color: "#8493A6", cursor: "pointer" }}>×</button>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0 20px", borderBottom: "1px solid #f0f4f8", marginBottom: 8 }}>
-                <div style={{ width: 48, height: 48, borderRadius: "50%", background: user.is_active ? "linear-gradient(135deg,#1d6fcc,#3b9eff)" : "#c4ccd8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0 20px", borderBottom: "1px solid #F5F7FA", marginBottom: 8 }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: user.is_active ? "linear-gradient(135deg,#5AA9E6,#3b9eff)" : "#c4ccd8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff" }}>
                     {user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2332" }}>{user.name}</div>
-                    <div style={{ fontSize: 13, color: "#6b7a99" }}>{user.email}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#0B0F14" }}>{user.name}</div>
+                    <div style={{ fontSize: 13, color: "#5B6B7D" }}>{user.email}</div>
                 </div>
             </div>
             <Row label="ID">#{user.id}</Row>
             <Row label={t("fieldRole")}><span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: badge.bg, color: badge.color }}>{t("roles")[user.role] || user.role}</span></Row>
             <Row label="2FA (Authenticator)">
                 {user.totp_enabled
-                    ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>🔐 Enabled</span>
-                    : <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" }}>⚠ Not set up</span>
+                    ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#E8F8F2", color: "#0E9370", border: "1px solid #A8E6CC" }}>🔐 Enabled</span>
+                    : <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#FBEAEA", color: "#B23A3D", border: "1px solid #F3B7B8" }}>⚠ Not set up</span>
                 }
             </Row>
-            <Row label={t("statusCol")}><span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: user.is_active ? "#dcfce7" : "#fef2f2", color: user.is_active ? "#166534" : "#b91c1c" }}>{user.is_active ? t("activeStatus") : t("inactiveStatus")}</span></Row>
+            <Row label={t("statusCol")}><span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: user.is_active ? "#E8F8F2" : "#FBEAEA", color: user.is_active ? "#0E9370" : "#B23A3D" }}>{user.is_active ? t("activeStatus") : t("inactiveStatus")}</span></Row>
             <Row label={t("createdAt")}>{user.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}</Row>
             <Row label={t("lastLogin")}>
-                <span style={{ color: stale && user.is_active ? "#dc2626" : "#1a2332" }}>
+                <span style={{ color: stale && user.is_active ? "#E6484B" : "#0B0F14" }}>
                     {user.last_login ? new Date(user.last_login).toLocaleDateString() : "—"}
-                    {stale && user.is_active && <span style={{ marginLeft: 6, fontSize: 10, color: "#dc2626", fontWeight: 600 }}>⚠ {t("inactiveWarning")}</span>}
+                    {stale && user.is_active && <span style={{ marginLeft: 6, fontSize: 10, color: "#E6484B", fontWeight: 600 }}>⚠ {t("inactiveWarning")}</span>}
                 </span>
             </Row>
             <div style={{ marginTop: 20, display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center" }}>
@@ -213,7 +213,7 @@ function DetailModal({ user, onClose }) {
                         🔄 Reset 2FA
                     </button>
                 )}
-                <button onClick={onClose} style={{ marginLeft: "auto", padding: "8px 20px", fontSize: 13, fontWeight: 600, background: "#1d6fcc", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("close")}</button>
+                <button onClick={onClose} style={{ marginLeft: "auto", padding: "8px 20px", fontSize: 13, fontWeight: 600, background: "#5AA9E6", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>{t("close")}</button>
             </div>
         </Modal>
     );
@@ -224,7 +224,7 @@ function SkeletonRow() {
         <tr>
             {[...Array(8)].map((_, i) => (
                 <td key={i} style={{ padding: "13px 16px" }}>
-                    <div style={{ height: 14, background: "#f0f4f8", borderRadius: 4, width: i === 0 ? 24 : i === 6 ? 80 : "80%", animation: "pulse 1.4s ease-in-out infinite" }} />
+                    <div style={{ height: 14, background: "#F5F7FA", borderRadius: 4, width: i === 0 ? 24 : i === 6 ? 80 : "80%", animation: "pulse 1.4s ease-in-out infinite" }} />
                 </td>
             ))}
         </tr>
@@ -313,9 +313,9 @@ export default function UserManagement() {
 
     useEffect(() => { setPage(1); }, [search, roleFilter, statusFilter]);
 
-    const inp = { padding: "8px 12px", fontSize: 13, border: "1px solid #d1d9e6", borderRadius: 8, color: "#1a2332", fontFamily: "inherit", outline: "none", background: "#fff" };
-    const btnP = { padding: "8px 16px", fontSize: 13, fontWeight: 600, borderRadius: 8, border: "none", cursor: "pointer", background: "#1d6fcc", color: "#fff", fontFamily: "inherit" };
-    const btnS = { ...btnP, background: "#fff", border: "1px solid #d1d9e6", color: "#374151" };
+    const inp = { padding: "8px 12px", fontSize: 13, border: "1px solid #E2E8F0", borderRadius: 8, color: "#0B0F14", fontFamily: "inherit", outline: "none", background: "#fff" };
+    const btnP = { padding: "8px 16px", fontSize: 13, fontWeight: 600, borderRadius: 8, border: "none", cursor: "pointer", background: "#5AA9E6", color: "#fff", fontFamily: "inherit" };
+    const btnS = { ...btnP, background: "#fff", border: "1px solid #E2E8F0", color: "#374151" };
 
     return (
         <div style={{ fontFamily: "'Inter', Arial, sans-serif", maxWidth: 1200 }}>
@@ -324,13 +324,13 @@ export default function UserManagement() {
                 @keyframes fadeModal { from{opacity:0}to{opacity:1} }
                 @keyframes slideUpModal { from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1} }
                 @keyframes slideInToast { from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1} }
-                tr:hover td { background: #f8faff !important; }
+                tr:hover td { background: #F5F7FA !important; }
                 button:hover:not(:disabled) { opacity: 0.88; }
             `}</style>
 
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22, gap: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 9, background: "#1d6fcc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 9, background: "#5AA9E6", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                             <circle cx="7" cy="5" r="3.2" stroke="white" strokeWidth="1.5" />
                             <path d="M1 15c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
@@ -339,17 +339,17 @@ export default function UserManagement() {
                         </svg>
                     </div>
                     <div>
-                        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a2332", margin: 0 }}>{t("userMgmtTitle")}</h2>
-                        <p style={{ fontSize: 11, color: "#9aa5b4", margin: 0 }}>{t("userMgmtDesc")}</p>
+                        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0B0F14", margin: 0 }}>{t("userMgmtTitle")}</h2>
+                        <p style={{ fontSize: 11, color: "#8493A6", margin: 0 }}>{t("userMgmtDesc")}</p>
                     </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                    
                     {staleCount > 0 && (
                         <button onClick={handleMarkInactive} disabled={markingInactive} title={t("markInactiveDesc")}
-                            style={{ ...btnS, display: "flex", alignItems: "center", gap: 6, borderColor: "#fde68a", color: "#92400e", background: "#fef9ec", fontSize: 12, opacity: markingInactive ? 0.6 : 1 }}>
+                            style={{ ...btnS, display: "flex", alignItems: "center", gap: 6, borderColor: "#F5D48A", color: "#92400e", background: "#fef9ec", fontSize: 12, opacity: markingInactive ? 0.6 : 1 }}>
                              {t("markInactiveBtn")}
-                            <span style={{ background: "#f59e0b", color: "#fff", borderRadius: 999, fontSize: 10, fontWeight: 700, padding: "1px 6px" }}>{staleCount}</span>
+                            <span style={{ background: "#F0A93A", color: "#fff", borderRadius: 999, fontSize: 10, fontWeight: 700, padding: "1px 6px" }}>{staleCount}</span>
                         </button>
                     )}
                     <button onClick={() => setModal({ type: "add" })} style={{ ...btnP, display: "flex", alignItems: "center", gap: 7 }}>
@@ -360,7 +360,7 @@ export default function UserManagement() {
 
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: "1 1 220px" }}>
-                    <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#9aa5b4", fontSize: 14 }}></span>
+                    <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#8493A6", fontSize: 14 }}></span>
                     <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("searchPlaceholder")}
                         style={{ ...inp, paddingLeft: 32, width: "100%", maxWidth: 320, boxSizing: "border-box" }} />
                 </div>
@@ -372,7 +372,7 @@ export default function UserManagement() {
                         { val: "it_admin",             label: t("filterAdmin") },
                     ].map(({ val, label }) => (
                         <button key={val} onClick={() => setRoleFilter(val)}
-                            style={{ padding: "6px 13px", fontSize: 12, fontWeight: roleFilter === val ? 600 : 400, borderRadius: 7, border: "1px solid " + (roleFilter === val ? "#1d6fcc" : "#d1d9e6"), background: roleFilter === val ? "#eff6ff" : "#fff", color: roleFilter === val ? "#1d6fcc" : "#6b7a99", cursor: "pointer", fontFamily: "inherit" }}>
+                            style={{ padding: "6px 13px", fontSize: 12, fontWeight: roleFilter === val ? 600 : 400, borderRadius: 7, border: "1px solid " + (roleFilter === val ? "#5AA9E6" : "#E2E8F0"), background: roleFilter === val ? "#EAF4FC" : "#fff", color: roleFilter === val ? "#5AA9E6" : "#5B6B7D", cursor: "pointer", fontFamily: "inherit" }}>
                             {label}
                         </button>
                     ))}
@@ -384,13 +384,13 @@ export default function UserManagement() {
                         { val: "inactive", label: t("filterInactive") },
                     ].map(({ val, label }) => (
                         <button key={val} onClick={() => setStatusFilter(val)}
-                            style={{ padding: "6px 13px", fontSize: 12, fontWeight: statusFilter === val ? 600 : 400, borderRadius: 7, border: "1px solid " + (statusFilter === val ? "#059669" : "#d1d9e6"), background: statusFilter === val ? "#ecfdf5" : "#fff", color: statusFilter === val ? "#059669" : "#6b7a99", cursor: "pointer", fontFamily: "inherit" }}>
+                            style={{ padding: "6px 13px", fontSize: 12, fontWeight: statusFilter === val ? 600 : 400, borderRadius: 7, border: "1px solid " + (statusFilter === val ? "#12B886" : "#E2E8F0"), background: statusFilter === val ? "#ecfdf5" : "#fff", color: statusFilter === val ? "#12B886" : "#5B6B7D", cursor: "pointer", fontFamily: "inherit" }}>
                             {label}
                         </button>
                     ))}
                 </div>
-                <span style={{ marginLeft: "auto", fontSize: 12, color: "#9aa5b4", whiteSpace: "nowrap" }}>
-                    {t("total")} <strong style={{ color: "#1a2332" }}>{filtered.length}</strong> {t("usersLabel")}
+                <span style={{ marginLeft: "auto", fontSize: 12, color: "#8493A6", whiteSpace: "nowrap" }}>
+                    {t("total")} <strong style={{ color: "#0B0F14" }}>{filtered.length}</strong> {t("usersLabel")}
                 </span>
             </div>
 
@@ -398,9 +398,9 @@ export default function UserManagement() {
                 <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                         <thead>
-                            <tr style={{ background: "#f8faff", borderBottom: "1px solid #e2e8f0" }}>
+                            <tr style={{ background: "#F5F7FA", borderBottom: "1px solid #e2e8f0" }}>
                                 {["#", t("name"), t("email"), "Phone", t("role"), t("statusCol"), t("lastLogin"), t("actions")].map((col, i) => (
-                                    <th key={i} style={{ padding: "11px 16px", textAlign: i === 7 ? "right" : "left", fontSize: 11, fontWeight: 600, color: "#6b7a99", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
+                                    <th key={i} style={{ padding: "11px 16px", textAlign: i === 7 ? "right" : "left", fontSize: 11, fontWeight: 600, color: "#5B6B7D", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
                                         {col}
                                     </th>
                                 ))}
@@ -410,9 +410,9 @@ export default function UserManagement() {
                             {loading ? (
                                 [...Array(5)].map((_, i) => <SkeletonRow key={i} />)
                             ) : error ? (
-                                <tr><td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "#dc2626", fontSize: 13 }}>⚠ {error}</td></tr>
+                                <tr><td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "#E6484B", fontSize: 13 }}>⚠ {error}</td></tr>
                             ) : paginated.length === 0 ? (
-                                <tr><td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "#9aa5b4", fontSize: 13 }}>{t("noUsers")}</td></tr>
+                                <tr><td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "#8493A6", fontSize: 13 }}>{t("noUsers")}</td></tr>
                             ) : paginated.map((u, idx) => {
                                 const badge   = ROLE_BADGE[u.role] || { bg: "#f3f4f6", color: "#374151" };
                                 const initials = u.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
@@ -423,19 +423,19 @@ export default function UserManagement() {
                                 const hrs     = !u.is_active ? hoursUntilDeletion(u.deactivated_at) : null;
 
                                 return (
-                                    <tr key={u.id} style={{ borderBottom: "1px solid #f0f4f8", transition: "background 0.1s", opacity: u.is_active ? 1 : 0.7 }}>
-                                        <td style={{ padding: "13px 16px", color: "#9aa5b4", fontSize: 12 }}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                                    <tr key={u.id} style={{ borderBottom: "1px solid #F5F7FA", transition: "background 0.1s", opacity: u.is_active ? 1 : 0.7 }}>
+                                        <td style={{ padding: "13px 16px", color: "#8493A6", fontSize: 12 }}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                         <td style={{ padding: "13px 16px" }}>
                                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                <div style={{ width: 32, height: 32, borderRadius: "50%", background: u.is_active ? "linear-gradient(135deg,#1d6fcc,#3b9eff)" : "#c4ccd8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                                                <div style={{ width: 32, height: 32, borderRadius: "50%", background: u.is_active ? "linear-gradient(135deg,#5AA9E6,#3b9eff)" : "#c4ccd8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
                                                     {initials}
                                                 </div>
-                                                <span style={{ fontWeight: 500, color: "#1a2332" }}>{u.name}</span>
+                                                <span style={{ fontWeight: 500, color: "#0B0F14" }}>{u.name}</span>
                                             </div>
                                         </td>
-                                        <td style={{ padding: "13px 16px", color: "#6b7a99" }}>{u.email}</td>
-                                        <td style={{ padding: "13px 16px", color: "#6b7a99", fontSize: 12, whiteSpace: "nowrap" }}>
-                                            {u.phone_number ? <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 10 }}></span>{u.phone_number}</span> : <span style={{ color: "#d1d9e6" }}>—</span>}
+                                        <td style={{ padding: "13px 16px", color: "#5B6B7D" }}>{u.email}</td>
+                                        <td style={{ padding: "13px 16px", color: "#5B6B7D", fontSize: 12, whiteSpace: "nowrap" }}>
+                                            {u.phone_number ? <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 10 }}></span>{u.phone_number}</span> : <span style={{ color: "#E2E8F0" }}>—</span>}
                                         </td>
                                         <td style={{ padding: "13px 16px" }}>
                                             <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 999, background: badge.bg, color: badge.color, whiteSpace: "nowrap" }}>
@@ -444,37 +444,37 @@ export default function UserManagement() {
                                         </td>
                                         <td style={{ padding: "13px 16px" }}>
                                             <div>
-                                                <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 999, background: u.is_active ? "#dcfce7" : "#fef2f2", color: u.is_active ? "#166534" : "#b91c1c", whiteSpace: "nowrap" }}>
+                                                <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 999, background: u.is_active ? "#E8F8F2" : "#FBEAEA", color: u.is_active ? "#0E9370" : "#B23A3D", whiteSpace: "nowrap" }}>
                                                     {u.is_active ? t("activeStatus") : t("inactiveStatus")}
                                                 </span>
                                                 {hrs !== null && (
-                                                    <div style={{ fontSize: 10, color: hrs <= 2 ? "#dc2626" : "#f59e0b", fontWeight: 600, marginTop: 3, whiteSpace: "nowrap" }}>
+                                                    <div style={{ fontSize: 10, color: hrs <= 2 ? "#E6484B" : "#F0A93A", fontWeight: 600, marginTop: 3, whiteSpace: "nowrap" }}>
                                                           {hrs <= 0 ? "Deleting…" : `~${hrs}${t("hoursUntilDeletion")}`}
                                                     </div>
                                                 )}
                                             </div>
                                         </td>
-                                        <td style={{ padding: "13px 16px", color: stale && u.is_active ? "#dc2626" : "#9aa5b4", fontSize: 12, whiteSpace: "nowrap" }}>
+                                        <td style={{ padding: "13px 16px", color: stale && u.is_active ? "#E6484B" : "#8493A6", fontSize: 12, whiteSpace: "nowrap" }}>
                                             {u.last_login ? new Date(u.last_login).toLocaleDateString() : "—"}
                                             {stale && u.is_active && <span style={{ marginLeft: 5, fontSize: 10 }}>⚠</span>}
                                         </td>
                                         <td style={{ padding: "13px 16px", textAlign: "right" }}>
                                             <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
-                                                <ActionBtn title={t("viewDetails")} onClick={() => setModal({ type: "detail", user: u })} color="#1d4ed8" bg="#eff6ff">
+                                                <ActionBtn title={t("viewDetails")} onClick={() => setModal({ type: "detail", user: u })} color="#4A8FCB" bg="#EAF4FC">
                                                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 7v4M8 5.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                                                 </ActionBtn>
-                                                <ActionBtn title={t("edit")} onClick={() => setModal({ type: "edit", user: u })} color="#166534" bg="#dcfce7">
+                                                <ActionBtn title={t("edit")} onClick={() => setModal({ type: "edit", user: u })} color="#0E9370" bg="#E8F8F2">
                                                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 11.5L2.5 14l2.5-.5L13 5.5 10.5 3 2 11.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
                                                 </ActionBtn>
                                                 {!isAdmin && !isSelf && (
-                                                    <ActionBtn title={u.is_active ? t("deactivate") : t("activate")} onClick={() => handleToggleActive(u)} color={u.is_active ? "#92400e" : "#059669"} bg={u.is_active ? "#fef9ec" : "#ecfdf5"}>
+                                                    <ActionBtn title={u.is_active ? t("deactivate") : t("activate")} onClick={() => handleToggleActive(u)} color={u.is_active ? "#92400e" : "#12B886"} bg={u.is_active ? "#fef9ec" : "#ecfdf5"}>
                                                         {u.is_active
                                                             ? <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3"/></svg>
                                                             : <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M5 8l2.5 2.5L11 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3"/></svg>
                                                         }
                                                     </ActionBtn>
                                                 )}
-                                                <ActionBtn title={isAdmin ? t("cantDeleteAdmin") : isSelf ? t("cantDeleteSelf") : t("delete")} onClick={() => canDel && setModal({ type: "delete", user: u })} color={canDel ? "#b91c1c" : "#c4ccd8"} bg={canDel ? "#fef2f2" : "#f3f4f6"} disabled={!canDel}>
+                                                <ActionBtn title={isAdmin ? t("cantDeleteAdmin") : isSelf ? t("cantDeleteSelf") : t("delete")} onClick={() => canDel && setModal({ type: "delete", user: u })} color={canDel ? "#B23A3D" : "#c4ccd8"} bg={canDel ? "#FBEAEA" : "#f3f4f6"} disabled={!canDel}>
                                                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V2.5h4V4M5.5 4l.5 9h4l.5-9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                                                 </ActionBtn>
                                             </div>
@@ -487,14 +487,14 @@ export default function UserManagement() {
                 </div>
 
                 {!loading && !error && totalPages > 1 && (
-                    <div style={{ padding: "12px 16px", borderTop: "1px solid #f0f4f8", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 12, color: "#9aa5b4" }}>
-                            {t("page")} <strong style={{ color: "#1a2332" }}>{page}</strong> {t("of")} <strong style={{ color: "#1a2332" }}>{totalPages}</strong>
+                    <div style={{ padding: "12px 16px", borderTop: "1px solid #F5F7FA", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 12, color: "#8493A6" }}>
+                            {t("page")} <strong style={{ color: "#0B0F14" }}>{page}</strong> {t("of")} <strong style={{ color: "#0B0F14" }}>{totalPages}</strong>
                         </span>
                         <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ ...btnS, padding: "5px 12px", fontSize: 12, opacity: page === 1 ? 0.45 : 1 }}>{t("prev")}</button>
                             {[...Array(totalPages)].map((_, i) => (
-                                <button key={i} onClick={() => setPage(i + 1)} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 6, border: "1px solid " + (page === i + 1 ? "#1d6fcc" : "#d1d9e6"), background: page === i + 1 ? "#eff6ff" : "#fff", color: page === i + 1 ? "#1d6fcc" : "#374151", cursor: "pointer", fontFamily: "inherit", fontWeight: page === i + 1 ? 600 : 400 }}>
+                                <button key={i} onClick={() => setPage(i + 1)} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 6, border: "1px solid " + (page === i + 1 ? "#5AA9E6" : "#E2E8F0"), background: page === i + 1 ? "#EAF4FC" : "#fff", color: page === i + 1 ? "#5AA9E6" : "#374151", cursor: "pointer", fontFamily: "inherit", fontWeight: page === i + 1 ? 600 : 400 }}>
                                     {i + 1}
                                 </button>
                             ))}
